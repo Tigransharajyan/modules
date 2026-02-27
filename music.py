@@ -1,84 +1,112 @@
 # meta developer: @shaatimi
-# requires: aiohttp
+# requires: yt-dlp
 
+from .. import loader, utils
 import os
 import time
 import asyncio
 from yt_dlp import YoutubeDL
-from pyrogram import filters
 
-TMP_DIR = "/tmp"
-
-@app.on_message(dynamic_access_filter("music") & filters.command("music", prefixes="."))
-async def music_turbo(client, message):
-    if len(message.command) < 2:
-        return
-
-    query = " ".join(message.command[1:])
-    status_msg = await message.edit(f"🚀 <code>{query}</code>")
-
-    file = os.path.join(TMP_DIR, f"m_{message.id}.m4a")
-
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "default_search": "ytsearch1",
-        "outtmpl": file,
-        "quiet": True,
-        "noprogress": True,
-        "nocheckcertificate": True,
-        "ffmpeg_location": "/app/vendor/ffmpeg/ffmpeg",
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios"],
-                "skip": ["webpage", "hls"]
-            }
-        },
-        "user_agent": "com.google.android.youtube/19.29.37 (Linux; Android 11)",
+@loader.tds
+class Music(loader.Module):
+    strings_ru = {
+        "name": "Music",
+        "no_args": "❌ Укажи название музыки.",
+        "downloading": "🚀 <code>{query}</code>",
+        "blocked": "❌ YouTube заблокировал IP. Обнови yt-dlp.",
+        "error": "❌ Ошибка: {e}",
     }
 
-    async def p(current, total):
-        if not hasattr(p, "l"):
-            p.l = 0
-        t = time.time()
-        if t - p.l < 2.5:
+    strings = {
+        "name": "Music",
+        "no_args": "❌ Specify a song name.",
+        "downloading": "🚀 <code>{query}</code>",
+        "blocked": "❌ YouTube blocked server IP. Update yt-dlp.",
+        "error": "❌ Error: {e}",
+    }
+
+    @loader.command(
+        ru_doc="Быстро скачать музыку по названию",
+        en_doc="Fast music download by name",
+    )
+    async def music(self, message):
+        query = utils.get_args_raw(message)
+        if not query:
+            await utils.answer(message, self.strings["no_args"])
             return
-        done = int(current * 10 / total)
-        try:
-            await status_msg.edit(
-                f"📤 {'▰'*done}{'▱'*(10-done)} {int(current*100/total)}%"
-            )
-        except:
-            pass
-        p.l = t
 
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            info = await asyncio.to_thread(
-                ydl.extract_info,
-                f"ytsearch1:{query}",
-                download=True
-            )
-            if "entries" in info:
-                info = info["entries"][0]
-
-        await client.send_audio(
-            chat_id=message.chat.id,
-            audio=file,
-            title=info.get("title", "Unknown"),
-            performer=info.get("uploader", "YouTube"),
-            reply_to_message_id=message.id,
-            progress=p
+        status = await utils.answer(
+            message,
+            self.strings["downloading"].format(query=query)
         )
 
-        await status_msg.delete()
+        file = f"m_{message.id}.m4a"
 
-    except Exception as e:
-        text = str(e)
-        if "403" in text or "PO-Token" in text:
-            await status_msg.edit("ERROR: YouTube blocked Heroku IP. Update yt-dlp.")
-        else:
-            await status_msg.edit(f"ERROR: {text[:80]}")
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "default_search": "ytsearch1",
+            "outtmpl": file,
+            "quiet": True,
+            "noprogress": True,
+            "nocheckcertificate": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios"],
+                    "skip": ["webpage", "hls"],
+                }
+            },
+            "user_agent": "com.google.android.youtube/19.29.37 (Linux; Android 11)",
+        }
 
-    finally:
-        if os.path.exists(file):
-            os.remove(file)
+        async def progress(current, total):
+            if not hasattr(progress, "l"):
+                progress.l = 0
+            now = time.time()
+            if now - progress.l < 2.5:
+                return
+            percent = int(current * 100 / total)
+            bar = int(percent / 10)
+            try:
+                await status.edit(
+                    f"📤 {'▰'*bar}{'▱'*(10-bar)} {percent}%"
+                )
+            except:
+                pass
+            progress.l = now
+
+        try:
+            def extract():
+                with YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(
+                        f"ytsearch1:{query}",
+                        download=True
+                    )
+                    if "entries" in info:
+                        info = info["entries"][0]
+                    return info
+
+            info = await asyncio.to_thread(extract)
+
+            await message.client.send_file(
+                message.chat_id,
+                file,
+                voice=False,
+                attributes=None,
+                caption=info.get("title", "Unknown"),
+                reply_to=message.reply_to_msg_id,
+                progress_callback=progress,
+            )
+
+            await status.delete()
+
+        except Exception as e:
+            text = str(e)
+            if "403" in text or "PO-Token" in text:
+                await status.edit(self.strings["blocked"])
+            else:
+                await status.edit(
+                    self.strings["error"].format(e=text[:80])
+                )
+        finally:
+            if os.path.exists(file):
+                os.remove(file)
