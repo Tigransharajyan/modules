@@ -6,6 +6,7 @@ import os
 import time
 import asyncio
 from yt_dlp import YoutubeDL
+from mutagen.mp4 import MP4
 
 @loader.tds
 class Music(loader.Module):
@@ -86,6 +87,10 @@ class Music(loader.Module):
                     return info
 
             info = await asyncio.to_thread(extract)
+            audio = MP4(file)
+            audio["\xa9nam"] = info.get("title", "Unknown")
+            audio["\xa9ART"] = info.get("uploader", "YouTube")
+            audio.save()
 
             await message.client.send_file(
                 message.chat_id,
