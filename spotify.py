@@ -82,11 +82,14 @@ class SpotifyDLModule(loader.Module):
 
             status = await utils.answer(message, self.strings["downloading"].format(name=name))
 
-            # имя файла для Telegram = Artist - Title.m4a (без расширения в отображении)
             file_name = f"{artist} - {name}.m4a"
-            tmp_file = f"track_{message.id}.m4a"
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": file_name,
+                "quiet": True,
+                "noplaylist": True,
+            }
 
-            ydl_opts = {"format": "bestaudio/best", "outtmpl": tmp_file, "quiet": True, "noplaylist": True}
             with YoutubeDL(ydl_opts) as ydl:
                 await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{yt_query}", download=True)
 
@@ -109,16 +112,16 @@ class SpotifyDLModule(loader.Module):
 
             await message.client.send_file(
                 message.chat.id,
-                file=tmp_file,
-                file_name=file_name,  # это скрывает .m4a в Telegram
-                caption=caption,
+                file=file_name,
                 thumb=card,
+                caption=caption,
+                voice=False,
                 reply_to=message.reply_to_msg_id
             )
 
             await status.delete()
-            if os.path.exists(tmp_file):
-                os.remove(tmp_file)
+            if os.path.exists(file_name):
+                os.remove(file_name)
 
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(e=e))
