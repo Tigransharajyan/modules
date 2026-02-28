@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from yt_dlp import YoutubeDL
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
+import os
 
 @loader.tds
 class SpotifyDLModule(loader.Module):
@@ -18,7 +19,8 @@ class SpotifyDLModule(loader.Module):
         "not_found": "❌ Трек не найден.",
         "downloading": "⏳ Скачиваю трек: <b>{name}</b>",
         "sent": "✅ Трек отправлен",
-        "error": "❌ Ошибка:\n<code>{e}</code>"
+        "not_auth": "❌ Используй .sauth для авторизации",
+        "error": "❌ Ошибка:\n<code>{e}</code>",
     }
 
     def __init__(self):
@@ -26,7 +28,7 @@ class SpotifyDLModule(loader.Module):
         self.client_id = None
         self.client_secret = None
 
-    @loader.command(ru_doc="Установить Client ID для Spotify API")
+    @loader.command(ru_doc="Установить Client ID для Spotify API", en_doc="Set Spotify API Client ID")
     async def sclient(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -35,7 +37,7 @@ class SpotifyDLModule(loader.Module):
         self.client_id = arg
         await utils.answer(message, "✅ Client ID установлен.")
 
-    @loader.command(ru_doc="Установить Client Secret для Spotify API")
+    @loader.command(ru_doc="Установить Client Secret для Spotify API", en_doc="Set Spotify API Client Secret")
     async def ssecret(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -44,7 +46,7 @@ class SpotifyDLModule(loader.Module):
         self.client_secret = arg
         await utils.answer(message, "✅ Client Secret установлен.")
 
-    @loader.command(ru_doc="Авторизоваться в Spotify через Client ID/Secret")
+    @loader.command(ru_doc="Авторизация в Spotify через Client ID/Secret", en_doc="Authorize Spotify account")
     async def sauth(self, message):
         if not self.client_id or not self.client_secret:
             await utils.answer(message, "❌ Client ID или Secret не заданы.")
@@ -56,13 +58,14 @@ class SpotifyDLModule(loader.Module):
             ))
             await utils.answer(message, "✅ Авторизация пройдена.")
         except Exception as e:
-            await utils.answer(message, f"❌ Ошибка авторизации:\n<code>{e}</code>")
+            await utils.answer(message, self.strings["error"].format(e=e))
 
-    @loader.command(ru_doc="Найти трек в Spotify и отправить в Telegram с обложкой")
+    @loader.command(ru_doc="Найти трек и прислать в Telegram с обложкой", en_doc="Find track and send to Telegram with cover")
     async def sfind(self, message):
         if not self.sp:
-            await utils.answer(message, "❌ Используй .sauth для авторизации")
+            await utils.answer(message, self.strings["not_auth"])
             return
+
         query = utils.get_args_raw(message)
         if not query:
             await utils.answer(message, self.strings["no_query"])
@@ -93,7 +96,7 @@ class SpotifyDLModule(loader.Module):
             }
 
             with YoutubeDL(ydl_opts) as ydl:
-                info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{yt_query}", download=True)
+                await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{yt_query}", download=True)
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(img_url) as resp:
