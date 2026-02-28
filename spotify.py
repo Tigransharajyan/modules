@@ -10,6 +10,7 @@ from yt_dlp import YoutubeDL
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
 import os
+from pyrogram.types import Audio
 
 @loader.tds
 class SpotifyDLModule(loader.Module):
@@ -82,14 +83,8 @@ class SpotifyDLModule(loader.Module):
 
             status = await utils.answer(message, self.strings["downloading"].format(name=name))
 
-            # Скачиваем трек через yt-dlp в временный файл
             tmp_file = f"track_{message.id}.m4a"
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": tmp_file,
-                "quiet": True,
-                "noplaylist": True,
-            }
+            ydl_opts = {"format": "bestaudio/best", "outtmpl": tmp_file, "quiet": True, "noplaylist": True}
 
             with YoutubeDL(ydl_opts) as ydl:
                 await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{yt_query}", download=True)
@@ -111,14 +106,13 @@ class SpotifyDLModule(loader.Module):
 
             caption = f"Исполнитель: {artist}\nАльбом: {album}\n<a href='{spotify_url}'>Открыть в Spotify</a>"
 
-            await message.client.send_audio(
-                chat_id=message.chat.id,
-                audio=tmp_file,
-                thumb=card,
+            await message.client.send_file(
+                message.chat.id,
+                file=tmp_file,
                 caption=caption,
-                title=f"{artist} - {name}", 
-                performer=artist,
-                reply_to_message_id=message.reply_to_msg_id
+                thumb=card,
+                attributes=[Audio(duration=None, title=f"{artist} - {name}", performer=artist)],
+                reply_to=message.reply_to_msg_id
             )
 
             await status.delete()
