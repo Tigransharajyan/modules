@@ -82,11 +82,11 @@ class SpotifyDLModule(loader.Module):
 
             status = await utils.answer(message, self.strings["downloading"].format(name=name))
 
-            # Имя файла = Исполнитель - Название
-            file_name = f"{artist} - {name}.m4a"
+            # Скачиваем трек через yt-dlp в временный файл
+            tmp_file = f"track_{message.id}.m4a"
             ydl_opts = {
                 "format": "bestaudio/best",
-                "outtmpl": file_name,
+                "outtmpl": tmp_file,
                 "quiet": True,
                 "noplaylist": True,
             }
@@ -109,21 +109,21 @@ class SpotifyDLModule(loader.Module):
             img.save(card, "JPEG")
             card.seek(0)
 
-            # Caption с исполнителем, альбомом и ссылкой на Spotify
             caption = f"Исполнитель: {artist}\nАльбом: {album}\n<a href='{spotify_url}'>Открыть в Spotify</a>"
 
-            await message.client.send_file(
-                message.chat.id,
-                file=file_name,
+            await message.client.send_audio(
+                chat_id=message.chat.id,
+                audio=tmp_file,
                 thumb=card,
                 caption=caption,
-                voice=False,
-                reply_to=message.reply_to_msg_id
+                title=f"{artist} - {name}", 
+                performer=artist,
+                reply_to_message_id=message.reply_to_msg_id
             )
 
             await status.delete()
-            if os.path.exists(file_name):
-                os.remove(file_name)
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
 
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(e=e))
