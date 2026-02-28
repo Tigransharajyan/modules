@@ -23,6 +23,8 @@ class SpotifyModule(loader.Module):
         "secret_set": "✅ Client Secret установлен.",
         "redirect_set": "✅ Redirect URI установлен.",
         "missing_client": "❌ Client ID или Secret не заданы.",
+        "no_playback_device": "❌ Нет активного устройства для воспроизведения.",
+        "play_success": "✅ Трек запущен на устройстве {device}"
     }
 
     strings = {
@@ -36,6 +38,8 @@ class SpotifyModule(loader.Module):
         "secret_set": "✅ Client Secret set.",
         "redirect_set": "✅ Redirect URI set.",
         "missing_client": "❌ Client ID or Secret not set.",
+        "no_playback_device": "❌ No active playback device found.",
+        "play_success": "✅ Track started on device {device}"
     }
 
     def __init__(self):
@@ -44,8 +48,9 @@ class SpotifyModule(loader.Module):
         self.client_id = None
         self.client_secret = None
         self.redirect_uri = None
+        self.device_id = None
 
-    @loader.command(ru_doc="Задать Client ID", en_doc="Set Client ID")
+    @loader.command()
     async def sclient(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -54,7 +59,7 @@ class SpotifyModule(loader.Module):
         self.client_id = arg
         await utils.answer(message, self.strings["client_set"])
 
-    @loader.command(ru_doc="Задать Client Secret", en_doc="Set Client Secret")
+    @loader.command()
     async def ssecret(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -63,7 +68,7 @@ class SpotifyModule(loader.Module):
         self.client_secret = arg
         await utils.answer(message, self.strings["secret_set"])
 
-    @loader.command(ru_doc="Задать Redirect URI", en_doc="Set Redirect URI")
+    @loader.command()
     async def sredirect(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -72,7 +77,7 @@ class SpotifyModule(loader.Module):
         self.redirect_uri = arg
         await utils.answer(message, self.strings["redirect_set"])
 
-    @loader.command(ru_doc="Авторизация в Spotify", en_doc="Authorize Spotify account")
+    @loader.command()
     async def sauth(self, message):
         if not self.client_id or not self.client_secret or not self.redirect_uri:
             await utils.answer(message, self.strings["missing_client"])
@@ -83,7 +88,7 @@ class SpotifyModule(loader.Module):
                     client_id=self.client_id,
                     client_secret=self.client_secret,
                     redirect_uri=self.redirect_uri,
-                    scope="user-read-playback-state"
+                    scope="user-read-playback-state user-modify-playback-state"
                 )
             )
             me = await asyncio.to_thread(self.sp.current_user)
@@ -92,7 +97,7 @@ class SpotifyModule(loader.Module):
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка авторизации:\n<code>{e}</code>")
 
-    @loader.command(ru_doc="Найти трек и прислать в Telegram", en_doc="Find track and send to Telegram")
+    @loader.command()
     async def sfind(self, message):
         if not self.sp:
             await utils.answer(message, self.strings["not_auth"])
@@ -126,15 +131,15 @@ class SpotifyModule(loader.Module):
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
 
-    @loader.command(ru_doc="Показать текущий трек", en_doc="Show currently playing track")
+    @loader.command()
     async def snow(self, message):
         if not self.sp:
             await utils.answer(message, self.strings["not_auth"])
             return
         try:
-            track = await asyncio.to_thread(self.sp.current_playback)
+            track = await asyncio.to_thread(self.sp.current_user_playing_track)
             if not track or not track.get("item"):
-                await utils.answer(message, "❌ Сейчас ничего не играет.")
+                await utils.answer(message, "❌ Сейчас ничего не играет на активном устройстве.")
                 return
             t = track["item"]
             name = t["name"]
@@ -152,5 +157,25 @@ class SpotifyModule(loader.Module):
             caption = self.strings["current_track"].format(name=name, artist=artist, album=album) + f"\n<a href='{url}'>Открыть в Spotify</a>"
             await message.client.send_file(message.chat_id, image, caption=caption, reply_to=message.reply_to_msg_id)
 
+        except Exception as e:
+            await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
+
+    @loader.command()
+    async def splay(self, message):
+        if not self.sp:
+            await utils.answer(message, self.strings["not_auth"])
+            return
+        args = utils.get_args_raw(message)
+        if not args:
+            await utils.answer(message, "❌ Укажи Spotify track URI или ID")
+            return
+        try:
+            devices = await asyncio.to_thread(self.sp.devices)
+            if not devices["devices"]:
+                await utils.answer(message, self.strings["no_playback_device"])
+                return
+            self.device_id = devices["devices"][0]["id"]
+            await asyncio.to_thread(self.sp.start_playback, device_id=self.device_id, uris=[f"spotify:track:{args}"])
+            await utils.answer(message, self.strings["play_success"].format(device=devices["devices"][0]["name"]))
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
