@@ -108,10 +108,10 @@ class SpotifyDLModule(loader.Module):
             card.seek(0)
 
             await message.client.send_file(
-                chat_id=message.chat_id,
+                message.chat_id, 
                 file=file_name,
-                caption=f"<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}",
                 thumb=card,
+                caption=caption,
                 voice=False,
                 reply_to=message.reply_to_msg_id
             )
