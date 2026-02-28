@@ -77,11 +77,13 @@ class SpotifyDLModule(loader.Module):
             artist = ", ".join([a["name"] for a in track["artists"]])
             album = track["album"]["name"]
             img_url = track["album"]["images"][0]["url"]
+            spotify_url = track["external_urls"]["spotify"]
             yt_query = f"{name} {artist} audio"
 
             status = await utils.answer(message, self.strings["downloading"].format(name=name))
 
-            file_name = f"track_{message.id}.m4a"
+            # Имя файла = Исполнитель - Название
+            file_name = f"{artist} - {name}.m4a"
             ydl_opts = {
                 "format": "bestaudio/best",
                 "outtmpl": file_name,
@@ -100,16 +102,18 @@ class SpotifyDLModule(loader.Module):
             draw = ImageDraw.Draw(img)
             font = ImageFont.load_default()
             draw.rectangle([(0, img.height-40), (img.width, img.height)], fill=(0,0,0,180))
-            draw.text((10, img.height-35), f"{name} - {artist}", font=font, fill="white")
+            draw.text((10, img.height-35), f"{artist} - {name}", font=font, fill="white")
 
             card = BytesIO()
             card.name = "cover.jpg"
             img.save(card, "JPEG")
             card.seek(0)
-            caption = f"<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}"
+
+            # Caption с исполнителем, альбомом и ссылкой на Spotify
+            caption = f"Исполнитель: {artist}\nАльбом: {album}\n<a href='{spotify_url}'>Открыть в Spotify</a>"
 
             await message.client.send_file(
-                message.chat_id, 
+                message.chat.id,
                 file=file_name,
                 thumb=card,
                 caption=caption,
