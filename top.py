@@ -131,12 +131,12 @@ class Top(loader.Module):
                     peer=chat_id,
                     limit=limit,
                     offset_id=offset_id,
+                    offset_date=None,
                     add_offset=0,
                     max_id=0,
                     min_id=0,
                     hash=0
                 ))
-
                 if not history.messages:
                     break
 
