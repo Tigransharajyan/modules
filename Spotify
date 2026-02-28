@@ -8,6 +8,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from PIL import Image
 from io import BytesIO
 import aiohttp
+import os
 
 @loader.tds
 class SpotifyModule(loader.Module):
@@ -18,6 +19,10 @@ class SpotifyModule(loader.Module):
         "no_query": "❌ Укажи название трека.",
         "not_found": "❌ Трек не найден.",
         "current_track": "🎵 Сейчас играет:\n<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}",
+        "client_set": "✅ Client ID установлен.",
+        "secret_set": "✅ Client Secret установлен.",
+        "redirect_set": "✅ Redirect URI установлен.",
+        "missing_client": "❌ Client ID или Secret не заданы.",
     }
 
     strings = {
@@ -27,47 +32,81 @@ class SpotifyModule(loader.Module):
         "no_query": "❌ Specify a track name.",
         "not_found": "❌ Track not found.",
         "current_track": "🎵 Now playing:\n<b>{name}</b>\nArtist: {artist}\nAlbum: {album}",
+        "client_set": "✅ Client ID set.",
+        "secret_set": "✅ Client Secret set.",
+        "redirect_set": "✅ Redirect URI set.",
+        "missing_client": "❌ Client ID or Secret not set.",
     }
 
     def __init__(self):
         self.sp = None
         self.user = None
+        self.client_id = None
+        self.client_secret = None
+        self.redirect_uri = None
 
-    @loader.command(
-        ru_doc="Авторизация в Spotify",
-        en_doc="Authorize Spotify account",
-    )
+    @loader.command(ru_doc="Задать Client ID", en_doc="Set Client ID")
+    async def sclient(self, message):
+        arg = utils.get_args_raw(message)
+        if not arg:
+            await utils.answer(message, "❌ Укажи Client ID")
+            return
+        self.client_id = arg
+        await utils.answer(message, self.strings["client_set"])
+
+    @loader.command(ru_doc="Задать Client Secret", en_doc="Set Client Secret")
+    async def ssecret(self, message):
+        arg = utils.get_args_raw(message)
+        if not arg:
+            await utils.answer(message, "❌ Укажи Client Secret")
+            return
+        self.client_secret = arg
+        await utils.answer(message, self.strings["secret_set"])
+
+    @loader.command(ru_doc="Задать Redirect URI", en_doc="Set Redirect URI")
+    async def sredirect(self, message):
+        arg = utils.get_args_raw(message)
+        if not arg:
+            await utils.answer(message, "❌ Укажи Redirect URI")
+            return
+        self.redirect_uri = arg
+        await utils.answer(message, self.strings["redirect_set"])
+
+    @loader.command(ru_doc="Авторизация в Spotify", en_doc="Authorize Spotify account")
     async def sauth(self, message):
-        args = utils.get_args_raw(message)
+        if not self.client_id or not self.client_secret or not self.redirect_uri:
+            await utils.answer(message, self.strings["missing_client"])
+            return
         try:
-            self.sp = Spotify(auth_manager=SpotifyOAuth(scope="user-read-playback-state"))
-            me = self.sp.current_user()
+            self.sp = Spotify(
+                auth_manager=SpotifyOAuth(
+                    client_id=self.client_id,
+                    client_secret=self.client_secret,
+                    redirect_uri=self.redirect_uri,
+                    scope="user-read-playback-state"
+                )
+            )
+            me = await asyncio.to_thread(self.sp.current_user)
             self.user = me["display_name"]
             await utils.answer(message, self.strings["auth_success"].format(user=self.user))
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка авторизации:\n<code>{e}</code>")
 
-    @loader.command(
-        ru_doc="Найти трек и прислать в Telegram",
-        en_doc="Find track and send to Telegram",
-    )
+    @loader.command(ru_doc="Найти трек и прислать в Telegram", en_doc="Find track and send to Telegram")
     async def sfind(self, message):
         if not self.sp:
             await utils.answer(message, self.strings["not_auth"])
             return
-
         query = utils.get_args_raw(message)
         if not query:
             await utils.answer(message, self.strings["no_query"])
             return
-
         try:
             results = await asyncio.to_thread(self.sp.search, query, type="track", limit=1)
             items = results.get("tracks", {}).get("items", [])
             if not items:
                 await utils.answer(message, self.strings["not_found"])
                 return
-
             track = items[0]
             name = track["name"]
             artist = ", ".join([a["name"] for a in track["artists"]])
@@ -82,32 +121,21 @@ class SpotifyModule(loader.Module):
                     image.name = f"{name}.jpg"
 
             caption = f"<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}\n<a href='{url}'>Открыть в Spotify</a>"
-
-            await message.client.send_file(
-                message.chat_id,
-                image,
-                caption=caption,
-                reply_to=message.reply_to_msg_id
-            )
+            await message.client.send_file(message.chat_id, image, caption=caption, reply_to=message.reply_to_msg_id)
 
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
 
-    @loader.command(
-        ru_doc="Показать текущий трек",
-        en_doc="Show currently playing track",
-    )
+    @loader.command(ru_doc="Показать текущий трек", en_doc="Show currently playing track")
     async def snow(self, message):
         if not self.sp:
             await utils.answer(message, self.strings["not_auth"])
             return
-
         try:
             track = await asyncio.to_thread(self.sp.current_playback)
             if not track or not track.get("item"):
                 await utils.answer(message, "❌ Сейчас ничего не играет.")
                 return
-
             t = track["item"]
             name = t["name"]
             artist = ", ".join([a["name"] for a in t["artists"]])
@@ -122,13 +150,7 @@ class SpotifyModule(loader.Module):
                     image.name = f"{name}.jpg"
 
             caption = self.strings["current_track"].format(name=name, artist=artist, album=album) + f"\n<a href='{url}'>Открыть в Spotify</a>"
-
-            await message.client.send_file(
-                message.chat_id,
-                image,
-                caption=caption,
-                reply_to=message.reply_to_msg_id
-            )
+            await message.client.send_file(message.chat_id, image, caption=caption, reply_to=message.reply_to_msg_id)
 
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
