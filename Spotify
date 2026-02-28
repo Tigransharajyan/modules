@@ -1,54 +1,28 @@
 # meta developer: @shaatimi
-# requires: spotipy aiohttp Pillow
+# requires: spotipy aiohttp yt_dlp Pillow
 
 from .. import loader, utils
 import asyncio
-from spotipy import Spotify
-from spotipy.oauth2 import SpotifyOAuth
-from PIL import Image
-from io import BytesIO
 import aiohttp
-import os
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+from yt_dlp import YoutubeDL
+from spotipy import Spotify
+from spotipy.oauth2 import SpotifyClientCredentials
 
 @loader.tds
-class SpotifyModule(loader.Module):
-    strings_ru = {
-        "name": "Spotify",
-        "not_auth": "❌ Вы не авторизованы. Используй .sauth",
-        "auth_success": "✅ Успешно авторизован как {user}",
+class SpotifyDLModule(loader.Module):
+    strings = {
+        "name": "SpotifyDL",
         "no_query": "❌ Укажи название трека.",
         "not_found": "❌ Трек не найден.",
-        "current_track": "🎵 Сейчас играет:\n<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}",
-        "client_set": "✅ Client ID установлен.",
-        "secret_set": "✅ Client Secret установлен.",
-        "redirect_set": "✅ Redirect URI установлен.",
-        "missing_client": "❌ Client ID или Secret не заданы.",
-        "no_playback_device": "❌ Нет активного устройства для воспроизведения.",
-        "play_success": "✅ Трек запущен на устройстве {device}"
-    }
-
-    strings = {
-        "name": "Spotify",
-        "not_auth": "❌ Not authorized. Use .sauth",
-        "auth_success": "✅ Successfully authorized as {user}",
-        "no_query": "❌ Specify a track name.",
-        "not_found": "❌ Track not found.",
-        "current_track": "🎵 Now playing:\n<b>{name}</b>\nArtist: {artist}\nAlbum: {album}",
-        "client_set": "✅ Client ID set.",
-        "secret_set": "✅ Client Secret set.",
-        "redirect_set": "✅ Redirect URI set.",
-        "missing_client": "❌ Client ID or Secret not set.",
-        "no_playback_device": "❌ No active playback device found.",
-        "play_success": "✅ Track started on device {device}"
+        "downloading": "⏳ Скачиваю трек: <b>{name}</b>",
+        "sent": "✅ Трек отправлен",
+        "error": "❌ Ошибка:\n<code>{e}</code>"
     }
 
     def __init__(self):
         self.sp = None
-        self.user = None
-        self.client_id = None
-        self.client_secret = None
-        self.redirect_uri = None
-        self.device_id = None
 
     @loader.command()
     async def sclient(self, message):
@@ -57,7 +31,7 @@ class SpotifyModule(loader.Module):
             await utils.answer(message, "❌ Укажи Client ID")
             return
         self.client_id = arg
-        await utils.answer(message, self.strings["client_set"])
+        await utils.answer(message, "✅ Client ID установлен.")
 
     @loader.command()
     async def ssecret(self, message):
@@ -66,116 +40,87 @@ class SpotifyModule(loader.Module):
             await utils.answer(message, "❌ Укажи Client Secret")
             return
         self.client_secret = arg
-        await utils.answer(message, self.strings["secret_set"])
-
-    @loader.command()
-    async def sredirect(self, message):
-        arg = utils.get_args_raw(message)
-        if not arg:
-            await utils.answer(message, "❌ Укажи Redirect URI")
-            return
-        self.redirect_uri = arg
-        await utils.answer(message, self.strings["redirect_set"])
+        await utils.answer(message, "✅ Client Secret установлен.")
 
     @loader.command()
     async def sauth(self, message):
-        if not self.client_id or not self.client_secret or not self.redirect_uri:
-            await utils.answer(message, self.strings["missing_client"])
+        if not hasattr(self, "client_id") or not hasattr(self, "client_secret"):
+            await utils.answer(message, "❌ Client ID или Secret не заданы.")
             return
         try:
-            self.sp = Spotify(
-                auth_manager=SpotifyOAuth(
-                    client_id=self.client_id,
-                    client_secret=self.client_secret,
-                    redirect_uri=self.redirect_uri,
-                    scope="user-read-playback-state user-modify-playback-state"
-                )
-            )
-            me = await asyncio.to_thread(self.sp.current_user)
-            self.user = me["display_name"]
-            await utils.answer(message, self.strings["auth_success"].format(user=self.user))
+            self.sp = Spotify(auth_manager=SpotifyClientCredentials(
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            ))
+            await utils.answer(message, "✅ Авторизация пройдена.")
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка авторизации:\n<code>{e}</code>")
 
     @loader.command()
     async def sfind(self, message):
         if not self.sp:
-            await utils.answer(message, self.strings["not_auth"])
+            await utils.answer(message, "❌ Используй .sauth для авторизации")
             return
         query = utils.get_args_raw(message)
         if not query:
             await utils.answer(message, self.strings["no_query"])
             return
+
         try:
             results = await asyncio.to_thread(self.sp.search, query, type="track", limit=1)
             items = results.get("tracks", {}).get("items", [])
             if not items:
                 await utils.answer(message, self.strings["not_found"])
                 return
+
             track = items[0]
             name = track["name"]
             artist = ", ".join([a["name"] for a in track["artists"]])
             album = track["album"]["name"]
-            url = track["external_urls"]["spotify"]
             img_url = track["album"]["images"][0]["url"]
+            yt_query = f"{name} {artist} audio"
+
+            status = await utils.answer(message, self.strings["downloading"].format(name=name))
+
+            file_name = f"track_{message.id}.m4a"
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": file_name,
+                "quiet": True,
+                "noplaylist": True,
+            }
+
+            with YoutubeDL(ydl_opts) as ydl:
+                info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{yt_query}", download=True)
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(img_url) as resp:
-                    data = await resp.read()
-                    image = BytesIO(data)
-                    image.name = f"{name}.jpg"
+                    img_data = await resp.read()
 
-            caption = f"<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}\n<a href='{url}'>Открыть в Spotify</a>"
-            await message.client.send_file(message.chat_id, image, caption=caption, reply_to=message.reply_to_msg_id)
+            # Создаём карточку с обложкой
+            img = Image.open(BytesIO(img_data)).convert("RGB")
+            draw = ImageDraw.Draw(img)
+            font = ImageFont.load_default()
+            draw.rectangle([(0, img.height-40), (img.width, img.height)], fill=(0,0,0,180))
+            draw.text((10, img.height-35), f"{name} - {artist}", font=font, fill="white")
 
-        except Exception as e:
-            await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
+            card = BytesIO()
+            card.name = "cover.jpg"
+            img.save(card, "JPEG")
+            card.seek(0)
 
-    @loader.command()
-    async def snow(self, message):
-        if not self.sp:
-            await utils.answer(message, self.strings["not_auth"])
-            return
-        try:
-            track = await asyncio.to_thread(self.sp.current_user_playing_track)
-            if not track or not track.get("item"):
-                await utils.answer(message, "❌ Сейчас ничего не играет на активном устройстве.")
-                return
-            t = track["item"]
-            name = t["name"]
-            artist = ", ".join([a["name"] for a in t["artists"]])
-            album = t["album"]["name"]
-            url = t["external_urls"]["spotify"]
-            img_url = t["album"]["images"][0]["url"]
+            await message.client.send_audio(
+                chat_id=message.chat_id,
+                audio=file_name,
+                title=name,
+                performer=artist,
+                thumb=card,
+                reply_to_message_id=message.reply_to_msg_id
+            )
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(img_url) as resp:
-                    data = await resp.read()
-                    image = BytesIO(data)
-                    image.name = f"{name}.jpg"
-
-            caption = self.strings["current_track"].format(name=name, artist=artist, album=album) + f"\n<a href='{url}'>Открыть в Spotify</a>"
-            await message.client.send_file(message.chat_id, image, caption=caption, reply_to=message.reply_to_msg_id)
+            await status.delete()
+            if os.path.exists(file_name):
+                os.remove(file_name)
 
         except Exception as e:
-            await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
-
-    @loader.command()
-    async def splay(self, message):
-        if not self.sp:
-            await utils.answer(message, self.strings["not_auth"])
-            return
-        args = utils.get_args_raw(message)
-        if not args:
-            await utils.answer(message, "❌ Укажи Spotify track URI или ID")
-            return
-        try:
-            devices = await asyncio.to_thread(self.sp.devices)
-            if not devices["devices"]:
-                await utils.answer(message, self.strings["no_playback_device"])
-                return
-            self.device_id = devices["devices"][0]["id"]
-            await asyncio.to_thread(self.sp.start_playback, device_id=self.device_id, uris=[f"spotify:track:{args}"])
-            await utils.answer(message, self.strings["play_success"].format(device=devices["devices"][0]["name"]))
-        except Exception as e:
-            await utils.answer(message, f"❌ Ошибка:\n<code>{e}</code>")
+            await utils.answer(message, self.strings["error"].format(e=e))
