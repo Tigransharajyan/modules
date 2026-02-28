@@ -106,6 +106,7 @@ class SpotifyDLModule(loader.Module):
             card.name = "cover.jpg"
             img.save(card, "JPEG")
             card.seek(0)
+            caption = f"<b>{name}</b>\nИсполнитель: {artist}\nАльбом: {album}"
 
             await message.client.send_file(
                 message.chat_id, 
