@@ -13,12 +13,13 @@ import warnings
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 from telethon.tl.functions.messages import GetHistoryRequest
+from telethon.tl.types import InputMessagesFilterEmpty
 
 plt.style.use('dark_background')
 
 @loader.tds
 class Top(loader.Module):
-    """Module for viewing the top list in chat (excluding bots)"""
+    """Module for viewing the top list in chat"""
     strings = {
         "name": "Top",
         "top": "Top users by message count",
@@ -52,19 +53,37 @@ class Top(loader.Module):
             return
 
         if chat_type == 'chat':
-            users = await client.get_participants(chat_id)
-            # Фильтруем ботов
-            users_dict = {user.id: (user.username or user.first_name) for user in users if not getattr(user, "bot", False)}
-            message_count = defaultdict(int)
+            participants = await client.get_participants(chat_id)
+            user_dict = {p.id: (p.first_name or p.username or "Unknown", getattr(p, 'bot', False)) for p in participants}
+            message_counts = defaultdict(int)
+            offset_id = 0
+            limit = 100
 
-            for user_id in users_dict:
-                count = await self._get_message_count_fast(client, chat_id, user_id)
-                message_count[user_id] = count
+            while True:
+                history = await client(GetHistoryRequest(
+                    peer=chat_id,
+                    limit=limit,
+                    offset_id=offset_id,
+                    add_offset=0,
+                    max_id=0,
+                    min_id=0,
+                    hash=0
+                ))
 
-            sorted_message_count = sorted(message_count.items(), key=lambda item: item[1], reverse=True)
-            top_users = sorted_message_count[:20]
-            usernames = [users_dict[user_id] or "Unknown" for user_id, _ in top_users]
-            counts = [count for _, count in top_users]
+                if not history.messages:
+                    break
+
+                for msg in history.messages:
+                    if msg.sender_id and msg.sender_id in user_dict and not user_dict[msg.sender_id][1]:
+                        message_counts[msg.sender_id] += 1
+
+                offset_id = history.messages[-1].id
+                if len(history.messages) < limit:
+                    break
+
+            sorted_counts = sorted(message_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+            usernames = [user_dict[uid][0] for uid, _ in sorted_counts]
+            counts = [cnt for _, cnt in sorted_counts]
 
             fig, ax = plt.subplots(figsize=(10, 5))
             colors = self._generate_gradient('#8A2BE2', '#4B0082', len(usernames))
@@ -99,21 +118,43 @@ class Top(loader.Module):
             await utils.answer_file(m, buf, caption, force_document=False)
 
         else:
+            # private chat
             me = await client.get_me()
             target = await client.get_entity(chat_id)
-            my_count, their_count = await asyncio.gather(
-                self._get_message_count_fast(client, chat_id, me.id),
-                self._get_message_count_fast(client, chat_id, target.id)
-            )
-            message_counts = [(me.first_name, my_count), (target.first_name, their_count)]
-            sorted_message_counts = sorted(message_counts, key=lambda item: item[1], reverse=True)
 
-            usernames = [user for user, _ in sorted_message_counts]
-            counts = [count for _, count in sorted_message_counts]
+            offset_id = 0
+            limit = 100
+            counts = {me.id: 0, target.id: 0}
+
+            while True:
+                history = await client(GetHistoryRequest(
+                    peer=chat_id,
+                    limit=limit,
+                    offset_id=offset_id,
+                    add_offset=0,
+                    max_id=0,
+                    min_id=0,
+                    hash=0
+                ))
+
+                if not history.messages:
+                    break
+
+                for msg in history.messages:
+                    if msg.sender_id in counts:
+                        counts[msg.sender_id] += 1
+
+                offset_id = history.messages[-1].id
+                if len(history.messages) < limit:
+                    break
+
+            sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+            usernames = [me.first_name if uid == me.id else target.first_name for uid, _ in sorted_counts]
+            counts_list = [cnt for _, cnt in sorted_counts]
 
             fig, ax = plt.subplots(figsize=(10, 5))
             colors = self._generate_gradient('#8A2BE2', '#4B0082', len(usernames))
-            bars = ax.barh(usernames, counts, color=colors, edgecolor='black', linewidth=0.5)
+            bars = ax.barh(usernames, counts_list, color=colors, edgecolor='black', linewidth=0.5)
             for bar in bars:
                 bar.set_alpha(0.8)
                 bar.set_hatch('///')
@@ -140,33 +181,8 @@ class Top(loader.Module):
             buf.seek(0)
 
             caption = f"{self.strings['private_chat']} <b>{target.first_name}:</b>\n"
-            caption += "\n".join([f'"{user}" - {count}' for user, count in zip(usernames, counts)])
+            caption += "\n".join([f'"{user}" - {count}' for user, count in zip(usernames, counts_list)])
             await utils.answer_file(m, buf, caption, force_document=False)
-
-    async def _get_message_count_fast(self, client, chat_id, user_id):
-        total_count = 0
-        offset_id = 0
-        limit = 100
-        while True:
-            history = await client(GetHistoryRequest(
-                peer=chat_id,
-                offset_id=offset_id,
-                offset_date=None,
-                add_offset=0,
-                limit=limit,
-                max_id=0,
-                min_id=0,
-                hash=0
-            ))
-            if not history.messages:
-                break
-            for message in history.messages:
-                if message.sender_id == user_id:
-                    total_count += 1
-            offset_id = history.messages[-1].id
-            if len(history.messages) < limit:
-                break
-        return total_count
 
     def _generate_gradient(self, start_color, end_color, n):
         cmap = LinearSegmentedColormap.from_list('custom_gradient', [start_color, end_color], N=n)
