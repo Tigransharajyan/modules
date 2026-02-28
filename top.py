@@ -129,10 +129,10 @@ class Top(loader.Module):
             while True:
                 history = await client(GetHistoryRequest(
                     peer=chat_id,
-                    limit=limit,
                     offset_id=offset_id,
                     offset_date=None,
                     add_offset=0,
+                    limit=limit,
                     max_id=0,
                     min_id=0,
                     hash=0
