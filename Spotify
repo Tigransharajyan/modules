@@ -23,8 +23,10 @@ class SpotifyDLModule(loader.Module):
 
     def __init__(self):
         self.sp = None
+        self.client_id = None
+        self.client_secret = None
 
-    @loader.command()
+    @loader.command(ru_doc="Установить Client ID для Spotify API")
     async def sclient(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -33,7 +35,7 @@ class SpotifyDLModule(loader.Module):
         self.client_id = arg
         await utils.answer(message, "✅ Client ID установлен.")
 
-    @loader.command()
+    @loader.command(ru_doc="Установить Client Secret для Spotify API")
     async def ssecret(self, message):
         arg = utils.get_args_raw(message)
         if not arg:
@@ -42,9 +44,9 @@ class SpotifyDLModule(loader.Module):
         self.client_secret = arg
         await utils.answer(message, "✅ Client Secret установлен.")
 
-    @loader.command()
+    @loader.command(ru_doc="Авторизоваться в Spotify через Client ID/Secret")
     async def sauth(self, message):
-        if not hasattr(self, "client_id") or not hasattr(self, "client_secret"):
+        if not self.client_id or not self.client_secret:
             await utils.answer(message, "❌ Client ID или Secret не заданы.")
             return
         try:
@@ -56,7 +58,7 @@ class SpotifyDLModule(loader.Module):
         except Exception as e:
             await utils.answer(message, f"❌ Ошибка авторизации:\n<code>{e}</code>")
 
-    @loader.command()
+    @loader.command(ru_doc="Найти трек в Spotify и отправить в Telegram с обложкой")
     async def sfind(self, message):
         if not self.sp:
             await utils.answer(message, "❌ Используй .sauth для авторизации")
