@@ -8,16 +8,17 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 from yt_dlp import YoutubeDL
 import os
+from telethon.tl.types import DocumentAttributeAudio
 
 @loader.tds
 class MusicDLModule(loader.Module):
     strings = {
         "name": "MusicDL",
-        "no_query": "❌ Укажи название трека.",
-        "not_found": "❌ Трек не найден.",
-        "downloading": "⏳ Скачиваю трек: <b>{name}</b>",
-        "sent": "✅ Трек отправлен",
-        "error": "❌ Ошибка:\n<code>{e}</code>",
+        "no_query": "Укажи название трека.",
+        "not_found": "Трек не найден.",
+        "downloading": "Скачиваю трек: <b>{name}</b>",
+        "sent": "Трек отправлен",
+        "error": "Ошибка:\n<code>{e}</code>",
     }
 
     @loader.command(
@@ -32,10 +33,15 @@ class MusicDLModule(loader.Module):
 
         status = await utils.answer(message, self.strings["downloading"].format(name=query))
         card_name = "cover.jpg"
+        file_temp = "track.m4a"
 
         try:
-            file_temp = f"{query}.m4a"
-            ydl_opts = {"format": "bestaudio/best","outtmpl": file_temp,"quiet": True,"noplaylist": True}
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": file_temp,
+                "quiet": True,
+                "noplaylist": True
+            }
 
             with YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{query}", download=True)
@@ -45,6 +51,7 @@ class MusicDLModule(loader.Module):
             track_artist = track_info.get('uploader', "Unknown Artist")
             thumbnail_url = track_info.get('thumbnails', [{}])[-1].get('url', None)
             track_url = track_info.get('webpage_url', None)
+            duration = int(track_info.get('duration', 0))
 
             display_name = f"{track_title} - {track_artist}"
 
@@ -76,9 +83,6 @@ class MusicDLModule(loader.Module):
             else:
                 card = None
 
-            file_temp = f"{query}.m4a"
-            display_name = f"{track_title} - {track_artist}"
-
             await message.client.send_file(
                 message.chat.id,
                 file=file_temp,
@@ -86,12 +90,19 @@ class MusicDLModule(loader.Module):
                 caption=f"<b>{display_name}</b>\n<a href='{track_url}'>Открыть на YouTube</a>",
                 reply_to=message.reply_to_msg_id,
                 supports_streaming=True,
-                voice=False,
-                filename=display_name  # <- так Telegram покажет корректно
+                attributes=[DocumentAttributeAudio(
+                    duration=duration,
+                    title=track_title,
+                    performer=track_artist
+                )],
+                filename=display_name # Передаем имя без расширения
             )
+            
             await status.delete()
             if os.path.exists(file_temp):
                 os.remove(file_temp)
 
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(e=e))
+            if os.path.exists(file_temp):
+                os.remove(file_temp)
