@@ -76,6 +76,9 @@ class MusicDLModule(loader.Module):
             else:
                 card = None
 
+            file_temp = f"{query}.m4a"
+            display_name = f"{track_title} - {track_artist}"
+
             await message.client.send_file(
                 message.chat.id,
                 file=file_temp,
@@ -84,9 +87,8 @@ class MusicDLModule(loader.Module):
                 reply_to=message.reply_to_msg_id,
                 supports_streaming=True,
                 voice=False,
-                filename=f"{track_title} - {track_artist}"  # скрывает .m4a
+                filename=display_name  # <- так Telegram покажет корректно
             )
-
             await status.delete()
             if os.path.exists(file_temp):
                 os.remove(file_temp)
