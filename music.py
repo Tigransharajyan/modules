@@ -11,7 +11,7 @@ import os
 
 @loader.tds
 class MusicDLModule(loader.Module):
-    """Music downloader and last track info module"""
+    """Music downloader"""
     strings = {
         "name": "MusicDL",
         "no_query": "❌ Укажи название трека.",
@@ -19,11 +19,7 @@ class MusicDLModule(loader.Module):
         "downloading": "⏳ Скачиваю трек: <b>{name}</b>",
         "sent": "✅ Трек отправлен",
         "error": "❌ Ошибка:\n<code>{e}</code>",
-        "last_text_empty": "❌ Нет информации о последнем треке.",
     }
-
-    def __init__(self):
-        self.last_track = {} 
 
     @loader.command(
         ru_doc=".mfind <название> — найти трек и прислать в Telegram с обложкой",
@@ -36,13 +32,13 @@ class MusicDLModule(loader.Module):
             return
 
         status = await utils.answer(message, self.strings["downloading"].format(name=query))
-        file_name = f"{query}.m4a"
+        file_temp = f"temp_track.m4a"
         card_name = "cover.jpg"
 
         try:
             ydl_opts = {
                 "format": "bestaudio/best",
-                "outtmpl": file_name,
+                "outtmpl": file_temp,
                 "quiet": True,
                 "noplaylist": True,
             }
@@ -56,59 +52,43 @@ class MusicDLModule(loader.Module):
             thumbnail_url = track_info.get('thumbnails', [{}])[-1].get('url', None)
             track_url = track_info.get('webpage_url', None)
 
-            self.last_track[message.chat.id] = {
-                "title": track_title,
-                "artist": track_artist,
-                "url": track_url
-            }
+            display_name = f"{track_title} - {track_artist}"
 
             if thumbnail_url:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(thumbnail_url) as resp:
                         img_data = await resp.read()
+
                 img = Image.open(BytesIO(img_data)).convert("RGB")
-                draw = ImageDraw.Draw(img)
+
+                new_height = img.height + 50
+                new_img = Image.new("RGB", (img.width, new_height), (0,0,0))
+                new_img.paste(img, (0,0))
+                draw = ImageDraw.Draw(new_img)
                 font = ImageFont.load_default()
-                draw.rectangle([(0, img.height-40), (img.width, img.height)], fill=(0,0,0,180))
-                draw.text((10, img.height-35), f"{track_title} - {track_artist}", font=font, fill="white")
+                text = display_name
+                text_width, text_height = draw.textsize(text, font=font)
+                draw.rectangle([(0, img.height), (img.width, new_height)], fill=(0,0,0,200))
+                draw.text(((img.width - text_width)//2, img.height + 15), text, font=font, fill="white")
                 card = BytesIO()
                 card.name = card_name
-                img.save(card, "JPEG")
+                new_img.save(card, "JPEG")
                 card.seek(0)
             else:
                 card = None
 
-            caption = f"Исполнитель: {track_artist}\n<a href='{track_url}'>Открыть на YouTube</a>"
-
             await message.client.send_file(
                 message.chat.id,
-                file=file_name,
+                file=file_temp,
                 thumb=card,
-                caption=caption,
-                reply_to=message.reply_to_msg_id
+                caption=f"<b>{display_name}</b>\n<a href='{track_url}'>Открыть на YouTube</a>",
+                reply_to=message.reply_to_msg_id,
+                force_document=True,
             )
 
             await status.delete()
-            if os.path.exists(file_name):
-                os.remove(file_name)
+            if os.path.exists(file_temp):
+                os.remove(file_temp)
 
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(e=e))
-
-    @loader.command(
-        ru_doc=".mtext — показать текст последнего трека в формате quote",
-        en_doc=".mtext — show last track info in quote format"
-    )
-    async def mtext(self, message):
-        info = self.last_track.get(message.chat.id)
-        if not info:
-            await utils.answer(message, self.strings["last_text_empty"])
-            return
-
-        lines = [
-            f"<b>Название:</b> {info.get('title')}",
-            f"<b>Исполнитель:</b> {info.get('artist')}",
-            f"<b>Ссылка:</b> {info.get('url')}"
-        ]
-        quote_text = "\n".join([f"<code>{line}</code>" for line in lines])
-        await utils.answer(message, quote_text)
