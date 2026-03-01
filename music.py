@@ -56,8 +56,8 @@ class MusicDLModule(loader.Module):
 
             if thumbnail_url:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(thumbnail_url) as resp:
-                        img_data = await resp.read()
+                async with session.get(thumbnail_url) as resp:
+                    img_data = await resp.read()
 
                 img = Image.open(BytesIO(img_data)).convert("RGB")
 
@@ -67,9 +67,14 @@ class MusicDLModule(loader.Module):
                 draw = ImageDraw.Draw(new_img)
                 font = ImageFont.load_default()
                 text = display_name
-                text_width, text_height = draw.textsize(text, font=font)
+
+                bbox = draw.textbbox((0,0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+
                 draw.rectangle([(0, img.height), (img.width, new_height)], fill=(0,0,0,200))
-                draw.text(((img.width - text_width)//2, img.height + 15), text, font=font, fill="white")
+                draw.text(((img.width - text_width)//2, img.height + (50 - text_height)//2), text, font=font, fill="white")
+
                 card = BytesIO()
                 card.name = card_name
                 new_img.save(card, "JPEG")
