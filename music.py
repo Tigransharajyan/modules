@@ -82,8 +82,9 @@ class MusicDLModule(loader.Module):
                 thumb=card,
                 caption=f"<b>{display_name}</b>\n<a href='{track_url}'>Открыть на YouTube</a>",
                 reply_to=message.reply_to_msg_id,
-                force_document=True,
-                filename=f"{track_title} - {track_artist}"
+                supports_streaming=True,
+                voice=False,
+                filename=f"{track_title} - {track_artist}"  # скрывает .m4a
             )
 
             await status.delete()
