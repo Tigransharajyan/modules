@@ -87,7 +87,6 @@ class MusicDLModule(loader.Module):
                 message.chat.id,
                 file=file_temp,
                 thumb=card,
-                caption=f"<b>{display_name}</b>\n<a href='{track_url}'>Открыть на YouTube</a>",
                 reply_to=message.reply_to_msg_id,
                 supports_streaming=True,
                 attributes=[DocumentAttributeAudio(
@@ -95,7 +94,7 @@ class MusicDLModule(loader.Module):
                     title=track_title,
                     performer=track_artist
                 )],
-                filename=display_name # Передаем имя без расширения
+                filename=display_name 
             )
             
             await status.delete()
