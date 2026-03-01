@@ -33,7 +33,7 @@ class MusicDLModule(loader.Module):
 
         status = await utils.answer(message, self.strings["downloading"].format(name=query))
         card_name = "cover.jpg"
-        file_temp = "track.m4a"
+        file_temp = f"track_{message.id}.m4a"
 
         try:
             ydl_opts = {
@@ -46,11 +46,14 @@ class MusicDLModule(loader.Module):
             with YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{query}", download=True)
 
+            if not info or 'entries' not in info or not info['entries']:
+                await utils.answer(message, self.strings["not_found"])
+                return
+
             track_info = info['entries'][0]
             track_title = track_info.get('title', query)
             track_artist = track_info.get('uploader', "Unknown Artist")
             thumbnail_url = track_info.get('thumbnails', [{}])[-1].get('url', None)
-            track_url = track_info.get('webpage_url', None)
             duration = int(track_info.get('duration', 0))
 
             display_name = f"{track_title} - {track_artist}"
@@ -84,7 +87,7 @@ class MusicDLModule(loader.Module):
                 card = None
 
             await message.client.send_file(
-                message.chat.id,
+                message.peer_id,
                 file=file_temp,
                 thumb=card,
                 reply_to=message.reply_to_msg_id,
@@ -97,11 +100,12 @@ class MusicDLModule(loader.Module):
                 filename=display_name 
             )
             
-            await status.delete()
-            if os.path.exists(file_temp):
-                os.remove(file_temp)
+            if status:
+                await status.delete()
 
         except Exception as e:
-            await utils.answer(message, self.strings["error"].format(e=e))
+            await utils.answer(message, self.strings["error"].format(e=str(e)))
+        
+        finally:
             if os.path.exists(file_temp):
                 os.remove(file_temp)
