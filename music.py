@@ -22,8 +22,8 @@ class MusicDLModule(loader.Module):
     }
 
     @loader.command(
-        ru_doc=".mfind <название> — найти трек и прислать в Telegram с обложкой",
-        en_doc=".mfind <track name> — find track and send audio with cover"
+        ru_doc="<название> — найти трек и прислать в Telegram с обложкой",
+        en_doc="<track name> — find track and send audio with cover"
     )
     async def mfind(self, message):
         query = utils.get_args_raw(message)
