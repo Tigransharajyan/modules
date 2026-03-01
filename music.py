@@ -32,10 +32,10 @@ class MusicDLModule(loader.Module):
             return
 
         status = await utils.answer(message, self.strings["downloading"].format(name=query))
-        file_temp = f"temp_track.m4a"
         card_name = "cover.jpg"
 
         try:
+            file_temp = f"{query}.mp3"  
             ydl_opts = {
                 "format": "bestaudio/best",
                 "outtmpl": file_temp,
@@ -54,31 +54,36 @@ class MusicDLModule(loader.Module):
 
             display_name = f"{track_title} - {track_artist}"
 
-            card = None
             if thumbnail_url:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(thumbnail_url) as resp:
                         img_data = await resp.read()
 
-                    img = Image.open(BytesIO(img_data)).convert("RGB")
-                    new_height = img.height + 50
-                    new_img = Image.new("RGB", (img.width, new_height), (0,0,0))
-                    new_img.paste(img, (0,0))
-                    draw = ImageDraw.Draw(new_img)
-                    font = ImageFont.load_default()
-                    text = display_name
+                img = Image.open(BytesIO(img_data)).convert("RGB")
+                new_height = img.height + 50
+                new_img = Image.new("RGB", (img.width, new_height), (0,0,0))
+                new_img.paste(img, (0,0))
 
-                    bbox = draw.textbbox((0,0), text, font=font)
-                    text_width = bbox[2] - bbox[0]
-                    text_height = bbox[3] - bbox[1]
+                draw = ImageDraw.Draw(new_img)
+                font = ImageFont.load_default()
+                text = display_name
 
-                    draw.rectangle([(0, img.height), (img.width, new_height)], fill=(0,0,0,200))
-                    draw.text(((img.width - text_width)//2, img.height + (50 - text_height)//2), text, font=font, fill="white")
+                bbox = draw.textbbox((0,0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
 
-                    card = BytesIO()
-                    card.name = card_name
-                    new_img.save(card, "JPEG")
-                    card.seek(0)
+                draw.rectangle([(0, img.height), (img.width, new_height)], fill=(0,0,0,200))
+                draw.text(
+                    ((img.width - text_width)//2, img.height + (50 - text_height)//2),
+                    text, font=font, fill="white"
+                )
+
+                card = BytesIO()
+                card.name = card_name
+                new_img.save(card, "JPEG")
+                card.seek(0)
+            else:
+                card = None
 
             await message.client.send_file(
                 message.chat.id,
