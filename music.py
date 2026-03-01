@@ -11,7 +11,6 @@ import os
 
 @loader.tds
 class MusicDLModule(loader.Module):
-    """Music downloader"""
     strings = {
         "name": "MusicDL",
         "no_query": "❌ Укажи название трека.",
@@ -35,13 +34,8 @@ class MusicDLModule(loader.Module):
         card_name = "cover.jpg"
 
         try:
-            file_temp = f"{query}.mp3"  
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": file_temp,
-                "quiet": True,
-                "noplaylist": True,
-            }
+            file_temp = f"{query}.m4a"
+            ydl_opts = {"format": "bestaudio/best","outtmpl": file_temp,"quiet": True,"noplaylist": True}
 
             with YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, f"ytsearch1:{query}", download=True)
@@ -73,10 +67,7 @@ class MusicDLModule(loader.Module):
                 text_height = bbox[3] - bbox[1]
 
                 draw.rectangle([(0, img.height), (img.width, new_height)], fill=(0,0,0,200))
-                draw.text(
-                    ((img.width - text_width)//2, img.height + (50 - text_height)//2),
-                    text, font=font, fill="white"
-                )
+                draw.text(((img.width - text_width)//2, img.height + (50 - text_height)//2), text, font=font, fill="white")
 
                 card = BytesIO()
                 card.name = card_name
@@ -92,6 +83,7 @@ class MusicDLModule(loader.Module):
                 caption=f"<b>{display_name}</b>\n<a href='{track_url}'>Открыть на YouTube</a>",
                 reply_to=message.reply_to_msg_id,
                 force_document=True,
+                filename=f"{track_title} - {track_artist}"
             )
 
             await status.delete()
