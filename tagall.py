@@ -48,4 +48,4 @@ class TagAllModule(loader.Module):
                 parse_mode="html"
             )
 
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.1)
