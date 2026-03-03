@@ -49,3 +49,5 @@ class TagAllModule(loader.Module):
             )
 
             await asyncio.sleep(0.1)
+
+    await message.delete()
