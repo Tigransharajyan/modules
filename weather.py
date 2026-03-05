@@ -7,8 +7,7 @@ from datetime import datetime
 
 @loader.tds
 class Weather(loader.Module):
-    
-    
+
     strings = {
         "name": "Weather",
         "invalid": "<b>❌ Укажите город.</b>",
@@ -18,8 +17,6 @@ class Weather(loader.Module):
 
     strings_ru = {
         "weather_info": """{cloud_emoji} <b>Погода в {city}, {country}</b>
-
-    
 
 {temp_emoji} <b>Температура:</b> <code>{temp}°C</code>
 {feels_emoji} <b>Ощущается:</b> <code>{feels}°C</code>
@@ -55,11 +52,6 @@ class Weather(loader.Module):
 
 <b>{description}</b>"""
     }
-
-    @loader.command(
-        ru_doc="Посмотреть погоду в указанном городе",
-        en_doc="Check the weather in the specified city",
-    )
 
     def get_temp_emoji(self, temp):
         if temp <= -10:
@@ -104,7 +96,10 @@ class Weather(loader.Module):
         else:
             return "☁️"
 
-    @loader.command()
+    @loader.command(
+        ru_doc="Посмотреть погоду в указанном городе",
+        en_doc="Check the weather in the specified city",
+    )
     async def weather(self, message):
         args = utils.get_args_raw(message)
         if not args:
@@ -147,8 +142,6 @@ class Weather(loader.Module):
 
             if lang == "ru":
                 template = self.strings_ru["weather_info"]
-            elif lang == "jp":
-                template = self.strings_jp["weather_info"]
             else:
                 template = self.strings_en["weather_info"]
 
