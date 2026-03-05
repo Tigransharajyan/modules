@@ -1,9 +1,15 @@
-# meta developer: @xdesai
+# meta developer: @shaatimi
 # requires: requests
 
 from .. import loader, utils
 import requests
 from datetime import datetime
+
+
+@loader.command(
+    ru_doc="Посмотреть погоду в указанном городе",
+    en_doc="Check the weather in the specified city",
+)
 
 @loader.tds
 class Weather(loader.Module):
