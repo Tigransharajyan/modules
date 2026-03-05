@@ -9,9 +9,9 @@ from datetime import datetime
 class Weather(loader.Module):
     
     @loader.command(
-    ru_doc="Посмотреть погоду в указанном городе",
-    en_doc="Check the weather in the specified city",
-)
+        ru_doc="Посмотреть погоду в указанном городе",
+        en_doc="Check the weather in the specified city",
+    )
     
     strings = {
         "name": "Weather",
