@@ -8,10 +8,6 @@ from datetime import datetime
 @loader.tds
 class Weather(loader.Module):
     
-    @loader.command(
-        ru_doc="Посмотреть погоду в указанном городе",
-        en_doc="Check the weather in the specified city",
-    )
     
     strings = {
         "name": "Weather",
@@ -59,6 +55,11 @@ class Weather(loader.Module):
 
 <b>{description}</b>"""
     }
+
+    @loader.command(
+        ru_doc="Посмотреть погоду в указанном городе",
+        en_doc="Check the weather in the specified city",
+    )
 
     def get_temp_emoji(self, temp):
         if temp <= -10:
