@@ -86,17 +86,17 @@ class Weather(loader.Module):
             await utils.answer(message, self.strings["invalid"])
             return
 
-        lang = self.get_lang(message) 
         city = args
         api_key = "934e9392018dd900103f54e50b870c02"
 
         try:
             r = requests.get(
                 "https://api.openweathermap.org/data/2.5/weather",
-                params={"q": city, "appid": api_key, "units": "metric", "lang": "en"},
+                params={"q": city, "appid": api_key, "units": "metric", "lang": "ru"},
                 timeout=5
             )
             data = r.json()
+
             if data.get("cod") != 200:
                 await utils.answer(message, self.strings["notfound"].format(city))
                 return
@@ -120,10 +120,7 @@ class Weather(loader.Module):
             wind_emoji = self.get_wind_emoji(wind)
             cloud_emoji = self.get_cloud_emoji(clouds)
 
-            if lang == "ru":
-                template = self.strings_ru["weather_info"]
-            else:
-                template = self.strings_en["weather_info"]
+            template = self.strings_ru["weather_info"]
 
             text = template.format(
                 city=name,
@@ -148,12 +145,3 @@ class Weather(loader.Module):
 
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(e))
-
-    def get_lang(self, message):
-        if hasattr(message.client, "lang"):
-            lang = getattr(message.client, "lang", "en")
-            if lang.lower().startswith("ru"):
-                return "ru"
-            elif lang.lower().startswith("jp"):
-                return "jp"
-        return "ru"
