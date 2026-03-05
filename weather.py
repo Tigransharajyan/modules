@@ -34,25 +34,6 @@ class Weather(loader.Module):
 <b>{description}</b>"""
     }
 
-    strings_en = {
-        "weather_info": """{cloud_emoji} <b>Weather in {city}, {country}</b>
-
-{temp_emoji} <b>Temperature:</b> <code>{temp}°C</code>
-{feels_emoji} <b>Feels like:</b> <code>{feels}°C</code>
-
-<blockquote expandable>
-💧 <b>Humidity:</b> <code>{humidity}%</code>
-{wind_emoji} <b>Wind:</b> <code>{wind} m/s</code>
-☁️ <b>Clouds:</b> <code>{clouds}%</code>
-👁 <b>Visibility:</b> <code>{visibility} km</code>
-📊 <b>Pressure:</b> <code>{pressure} hPa</code>
-🌅 <b>Sunrise:</b> <code>{sunrise}</code>
-🌇 <b>Sunset:</b> <code>{sunset}</code>
-</blockquote>
-
-<b>{description}</b>"""
-    }
-
     def get_temp_emoji(self, temp):
         if temp <= -10:
             return "🥶"
@@ -98,7 +79,6 @@ class Weather(loader.Module):
 
     @loader.command(
         ru_doc="Посмотреть погоду в указанном городе",
-        en_doc="Check the weather in the specified city",
     )
     async def weather(self, message):
         args = utils.get_args_raw(message)
@@ -176,4 +156,4 @@ class Weather(loader.Module):
                 return "ru"
             elif lang.lower().startswith("jp"):
                 return "jp"
-        return "en"
+        return "ru"
