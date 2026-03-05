@@ -5,14 +5,14 @@ from .. import loader, utils
 import requests
 from datetime import datetime
 
-
-@loader.command(
+@loader.tds
+class Weather(loader.Module):
+    
+    @loader.command(
     ru_doc="Посмотреть погоду в указанном городе",
     en_doc="Check the weather in the specified city",
 )
-
-@loader.tds
-class Weather(loader.Module):
+    
     strings = {
         "name": "Weather",
         "invalid": "<b>❌ Укажите город.</b>",
@@ -22,6 +22,8 @@ class Weather(loader.Module):
 
     strings_ru = {
         "weather_info": """{cloud_emoji} <b>Погода в {city}, {country}</b>
+
+    
 
 {temp_emoji} <b>Температура:</b> <code>{temp}°C</code>
 {feels_emoji} <b>Ощущается:</b> <code>{feels}°C</code>
