@@ -26,7 +26,37 @@ class FilmModule(loader.Module):
         self.config = loader.ModuleConfig("OMDB_API_KEY", "", lambda: "OMDb API key")
         self.cache = {}  # simple in-memory cache: {query_lower: data}
 
-    @loader.command(ru_doc="<API_KEY> — сохранить OMDB API key")
+    # ---- Helper safe send / delete ----
+    async def safe_send(self, message, text, parse_mode="html", file=None, reply_to=None):
+        """
+        Пытаемся ответить через utils.answer (редактирует),
+        при ошибке -- посылаем новое сообщение напрямую через client.send_message / send_file.
+        Возвращаем объект сообщения (если удалось).
+        """
+        try:
+            if file:
+                # если есть файл, отправляем через client.send_file (utils.answer не поддерживает file reliably)
+                return await message.client.send_file(message.chat_id, file, caption=text, parse_mode=parse_mode, reply_to=reply_to)
+            else:
+                return await utils.answer(message, text)
+        except Exception:
+            try:
+                if file:
+                    return await message.client.send_file(message.chat_id, file, caption=text, parse_mode=parse_mode, reply_to=reply_to)
+                else:
+                    return await message.client.send_message(message.chat_id, text, parse_mode=parse_mode, reply_to=reply_to)
+            except Exception:
+                return None
+
+    async def safe_delete(self, msg_obj):
+        try:
+            if msg_obj and hasattr(msg_obj, "delete"):
+                await msg_obj.delete()
+        except Exception:
+            pass
+
+    # ---- Commands ----
+    @loader.command(ru_doc=".fauth <API_KEY> — сохранить OMDB API key")
     async def fauth(self, message):
         key = utils.get_args_raw(message).strip()
         if not key:
@@ -34,7 +64,7 @@ class FilmModule(loader.Module):
         self.config["OMDB_API_KEY"] = key
         await utils.answer(message, self.strings["saved"])
 
-    @loader.command(ru_doc="— показать статус ключа")
+    @loader.command(ru_doc=".fkey — показать статус ключа")
     async def fkey(self, message):
         key = self.config.get("OMDB_API_KEY") or ""
         if not key:
@@ -42,12 +72,12 @@ class FilmModule(loader.Module):
         masked = (key[:4] + "..." + key[-4:]) if len(key) > 8 else ("*" * len(key))
         await utils.answer(message, self.strings["fkey_show"].format(masked=escape(masked)))
 
-    @loader.command(ru_doc="— удалить ключ из конфигурации")
+    @loader.command(ru_doc=".funset — удалить ключ из конфигурации")
     async def funset(self, message):
         self.config["OMDB_API_KEY"] = ""
         await utils.answer(message, self.strings["funset_ok"])
 
-    @loader.command(ru_doc="<название> — информация о фильме/сериале")
+    @loader.command(ru_doc=".film <название> — информация о фильме/сериале")
     async def film(self, message):
         q = utils.get_args_raw(message).strip()
         if not q:
@@ -57,13 +87,22 @@ class FilmModule(loader.Module):
         if not api_key:
             return await utils.answer(message, self.strings["no_api"])
 
-        status = await utils.answer(message, self.strings["searching"].format(q=escape(q)))
+        status = await self.safe_send(message, self.strings["searching"].format(q=escape(q)))
         try:
-            data = await asyncio.to_thread(self.fetch_omdb_full, api_key, q)
-            if not data or data.get("Response") != "True":
-                await status.delete()
-                return await utils.answer(message, self.strings["not_found"].format(q=escape(q)))
+            # check cache first
+            cache_key = q.lower()
+            if cache_key in self.cache:
+                data = self.cache[cache_key]
+            else:
+                data = await asyncio.to_thread(self.fetch_omdb_full, api_key, q)
+                if data:
+                    self.cache[cache_key] = data
 
+            if not data or data.get("Response") != "True":
+                await self.safe_delete(status)
+                return await self.safe_send(message, self.strings["not_found"].format(q=escape(q)))
+
+            # extract fields
             title = data.get("Title", "—")
             year = data.get("Year", "—")
             kind = data.get("Type", "movie")
@@ -86,7 +125,7 @@ class FilmModule(loader.Module):
             imdb_id = data.get("imdbID", "")
             total_seasons = data.get("totalSeasons", "—") if kind == "series" else "—"
 
-            # try to estimate total episodes if series and seasons available (limit to avoid too many calls)
+            # estimate episodes count for series (if reasonable)
             episodes_total = "—"
             try:
                 if kind == "series" and str(total_seasons).isdigit():
@@ -133,60 +172,60 @@ class FilmModule(loader.Module):
             if poster and poster != "N/A":
                 try:
                     resp = await asyncio.to_thread(requests.get, poster, timeout=10)
-                    if resp.status_code == 200 and resp.content:
+                    if getattr(resp, "status_code", None) == 200 and getattr(resp, "content", None):
                         bio = BytesIO(resp.content)
                         bio.name = f"{title}.jpg"
                         bio.seek(0)
-                        await message.client.send_file(
-                            message.chat_id,
-                            bio,
-                            caption=details,
-                            parse_mode="html",
-                            reply_to=message.reply_to_msg_id
-                        )
-                        await status.delete()
-                        # cache
-                        self.cache[q.lower()] = data
+                        await self.safe_send(message, details, file=bio, reply_to=message.reply_to_msg_id)
+                        await self.safe_delete(status)
                         return
                 except Exception:
                     pass
 
-            await utils.answer(message, details)
-            await status.delete()
-            self.cache[q.lower()] = data
+            # fallback: just send text
+            await self.safe_send(message, details, reply_to=message.reply_to_msg_id)
+            await self.safe_delete(status)
 
         except Exception as e:
-            await status.delete()
-            await utils.answer(message, self.strings["error"].format(e=escape(str(e))))
+            await self.safe_delete(status)
+            await self.safe_send(message, self.strings["error"].format(e=escape(str(e))))
 
+    # ---- HTTP helpers ----
     def fetch_omdb_full(self, api_key, query):
-        # try exact title first
         url = "http://www.omdbapi.com/"
         params = {"apikey": api_key, "t": query, "plot": "full", "r": "json"}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            js = r.json()
-            if js.get("Response") == "True":
-                return js
+        try:
+            r = requests.get(url, params=params, timeout=10)
+            if r.status_code == 200:
+                js = r.json()
+                if js.get("Response") == "True":
+                    return js
+        except Exception:
+            pass
         # fallback search -> take first result by imdbID
-        params2 = {"apikey": api_key, "s": query, "r": "json"}
-        r2 = requests.get(url, params=params2, timeout=10)
-        if r2.status_code == 200:
-            js2 = r2.json()
-            if js2.get("Response") == "True" and js2.get("Search"):
-                first = js2["Search"][0]
-                imdbid = first.get("imdbID")
-                if imdbid:
-                    r3 = requests.get(url, params={"apikey": api_key, "i": imdbid, "plot": "full", "r": "json"}, timeout=10)
-                    if r3.status_code == 200:
-                        return r3.json()
+        try:
+            params2 = {"apikey": api_key, "s": query, "r": "json"}
+            r2 = requests.get(url, params=params2, timeout=10)
+            if r2.status_code == 200:
+                js2 = r2.json()
+                if js2.get("Response") == "True" and js2.get("Search"):
+                    first = js2["Search"][0]
+                    imdbid = first.get("imdbID")
+                    if imdbid:
+                        r3 = requests.get(url, params={"apikey": api_key, "i": imdbid, "plot": "full", "r": "json"}, timeout=10)
+                        if r3.status_code == 200:
+                            return r3.json()
+        except Exception:
+            pass
         return None
 
     def fetch_season(self, api_key, imdb_id, season_number):
-        # returns season data containing Episodes list for a season
         url = "http://www.omdbapi.com/"
         params = {"apikey": api_key, "i": imdb_id, "Season": season_number, "r": "json"}
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code == 200:
-            return r.json()
+        try:
+            r = requests.get(url, params=params, timeout=10)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
         return None
