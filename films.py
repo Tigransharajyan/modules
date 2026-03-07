@@ -26,7 +26,7 @@ class FilmModule(loader.Module):
         self.config = loader.ModuleConfig("OMDB_API_KEY", "", lambda: "OMDb API key")
         self.cache = {}  # simple in-memory cache: {query_lower: data}
 
-    @loader.command(ru_doc=".fauth <API_KEY> — сохранить OMDB API key")
+    @loader.command(ru_doc="<API_KEY> — сохранить OMDB API key")
     async def fauth(self, message):
         key = utils.get_args_raw(message).strip()
         if not key:
@@ -34,7 +34,7 @@ class FilmModule(loader.Module):
         self.config["OMDB_API_KEY"] = key
         await utils.answer(message, self.strings["saved"])
 
-    @loader.command(ru_doc=".fkey — показать статус ключа")
+    @loader.command(ru_doc="— показать статус ключа")
     async def fkey(self, message):
         key = self.config.get("OMDB_API_KEY") or ""
         if not key:
@@ -42,12 +42,12 @@ class FilmModule(loader.Module):
         masked = (key[:4] + "..." + key[-4:]) if len(key) > 8 else ("*" * len(key))
         await utils.answer(message, self.strings["fkey_show"].format(masked=escape(masked)))
 
-    @loader.command(ru_doc=".funset — удалить ключ из конфигурации")
+    @loader.command(ru_doc="— удалить ключ из конфигурации")
     async def funset(self, message):
         self.config["OMDB_API_KEY"] = ""
         await utils.answer(message, self.strings["funset_ok"])
 
-    @loader.command(ru_doc=".film <название> — информация о фильме/сериале")
+    @loader.command(ru_doc="<название> — информация о фильме/сериале")
     async def film(self, message):
         q = utils.get_args_raw(message).strip()
         if not q:
