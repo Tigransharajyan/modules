@@ -33,13 +33,13 @@ class FilmModule(loader.Module):
             if file:
                 return await message.client.send_file(message.chat_id, file, caption=text, parse_mode=parse_mode, reply_to=reply_to)
             else:
-                return await utils.answer(message, text)
+                return await message.client.send_message(message.chat_id, text, parse_mode=parse_mode, reply_to=reply_to)
         except Exception:
             try:
                 if file:
                     return await message.client.send_file(message.chat_id, file, caption=text, parse_mode=parse_mode, reply_to=reply_to)
                 else:
-                    return await message.client.send_message(message.chat_id, text, parse_mode=parse_mode, reply_to=reply_to)
+                    return await utils.answer(message, text)
             except Exception:
                 return None
 
@@ -228,7 +228,7 @@ class FilmModule(loader.Module):
                 parts.append(f"<blockquote expandable>{escape(plot)}</blockquote>")
             def add_if(v, label):
                 if v and v not in ("N/A", "-", "—"):
-                    parts.append(f"<b>{label}:</b> {escape(v)}")
+                    parts.append(f"{label}: {escape(v)}")
             add_if(genre, f"<emoji document_id=5454156248813432363> Жанр")
             add_if(director, f"<emoji document_id=5375464961822695044> Режиссёр")
             add_if(writers, f"<emoji document_id=5375464961822695044> Сценарий")
