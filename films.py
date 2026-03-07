@@ -229,25 +229,25 @@ class FilmModule(loader.Module):
                 parts.append("")
                 parts.append(f"<blockquote expandable>{escape(plot)}</blockquote>")
             
-            def add_if(v, label, emoji_id):
+            def add_if(v, label, emoji_id, fallback="✨"):
                 if v and v not in ("N/A", "-", "—"):
-                    parts.append(f"<emoji document_id='{emoji_id}'>•</emoji> {label}: {escape(v)}")
+                    parts.append(f"<emoji document_id='{emoji_id}'>{fallback}</emoji> {label}: {escape(v)}")
 
-            add_if(genre, "Жанр", "5454156248813432363")
-            add_if(director, "Режиссёр", "5375464961822695044")
-            add_if(writers, "Сценарий", "5375464961822695044")
+            add_if(genre, "Жанр", "5454156248813432363", "🎭")
+            add_if(director, "Режиссёр", "5375464961822695044", "🎥")
+            add_if(writers, "Сценарий", "5375464961822695044", "✍️")
             
             if country or language:
                 cl = f"{country or '—'} / {language or '—'}"
-                add_if(cl, "Страна / Язык", "5188381825701021648")
+                add_if(cl, "Страна / Язык", "5188381825701021648", "🌍")
             
-            add_if(awards, "Награды", "5359664288241829619")
-            add_if(runtime, "Длительность", "5454074580010295588")
-            add_if(total_seasons if kind == "series" else None, "Сезонов", "5258396243666681152")
-            add_if(episodes_total if kind == "series" else None, "Эпизодов", "5258396243666681152")
-            add_if(imdb_rating if imdb_rating and imdb_rating != "N/A" else None, "IMDb", "5363926570836699898")
-            add_if(metascore if metascore and metascore != "N/A" else None, "Metascore", "5363926570836699898")
-            add_if(rated, "Рейтинг", "5274046919809704653")
+            add_if(awards, "Награды", "5359664288241829619", "🏆")
+            add_if(runtime, "Длительность", "5454074580010295588", "⏳")
+            add_if(total_seasons if kind == "series" else None, "Сезонов", "5258396243666681152", "🔢")
+            add_if(episodes_total if kind == "series" else None, "Эпизодов", "5258396243666681152", "🎞")
+            add_if(imdb_rating if imdb_rating and imdb_rating != "N/A" else None, "IMDb", "5363926570836699898", "⭐")
+            add_if(metascore if metascore and metascore != "N/A" else None, "Metascore", "5363926570836699898", "📊")
+            add_if(rated, "Рейтинг", "5274046919809704653", "🔞")
             
             if imdb_id:
                 parts.append(f"<emoji document_id='5271604874419647061'>🔗</emoji> <b>Ссылка:</b> <a href='{imdb_link}'>IMDb</a>")
