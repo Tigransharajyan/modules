@@ -221,7 +221,7 @@ class FilmModule(loader.Module):
             imdb_link = f"https://www.imdb.com/title/{imdb_id}/" if imdb_id else ""
             trailer_search = f"https://www.youtube.com/results?search_query={quote_plus(title + ' trailer')}"
             parts = []
-            parts.append(f"<emoji document_id=5258217809250372293> <b>{escape(title)}</b> ({escape(year)})")
+            parts.append(f"<emoji document_id=\"5258217809250372293\"> <b>{escape(title)}</b> ({escape(year)})")
             parts.append(f"{' <b>Тип:</b> Сериал' if kind == 'series' else '<b>Тип:</b> Фильм'}")
             if plot and plot not in ("N/A", ""):
                 parts.append("")
@@ -229,25 +229,25 @@ class FilmModule(loader.Module):
             def add_if(v, label):
                 if v and v not in ("N/A", "-", "—"):
                     parts.append(f"{label}: {escape(v)}")
-            add_if(genre, f"<emoji document_id=5454156248813432363> Жанр")
-            add_if(director, f"<emoji document_id=5375464961822695044> Режиссёр")
-            add_if(writers, f"<emoji document_id=5375464961822695044> Сценарий")
+            add_if(genre, f"<emoji document_id=\"5454156248813432363\"> Жанр")
+            add_if(director, f"<emoji document_id=\"5375464961822695044\"> Режиссёр")
+            add_if(writers, f"<emoji document_id=\"5375464961822695044\"> Сценарий")
             if country or language:
                 cl = f"{country or '—'} / {language or '—'}"
-                add_if(cl, f"<emoji document_id=5188381825701021648> Страна / Язык")
-            add_if(awards, f"<emoji document_id=5359664288241829619> Награды")
-            add_if(runtime, f"<emoji document_id=5454074580010295588> Длительность")
-            add_if(total_seasons if kind == "series" else None, f"<emoji document_id=5258396243666681152> Сезонов")
-            add_if(episodes_total if kind == "series" else None, f"<emoji document_id=5258396243666681152> Эпизодов")
-            add_if(imdb_rating if imdb_rating and imdb_rating != "N/A" else None, f"<emoji document_id=5363926570836699898> IMDb")
+                add_if(cl, f"<emoji document_id=\"5188381825701021648\"> Страна / Язык")
+            add_if(awards, f"<emoji document_id=\"5359664288241829619\"> Награды")
+            add_if(runtime, f"<emoji document_id=\"5454074580010295588\"> Длительность")
+            add_if(total_seasons if kind == "series" else None, f"<emoji document_id=\"5258396243666681152\"> Сезонов")
+            add_if(episodes_total if kind == "series" else None, f"<emoji document_id=\"5258396243666681152\"> Эпизодов")
+            add_if(imdb_rating if imdb_rating and imdb_rating != "N/A" else None, f"<emoji document_id=\"5363926570836699898\"> IMDb")
             add_if(metascore if metascore and metascore != "N/A" else None, "Metascore")
-            add_if(rated, f"<emoji document_id=5274046919809704653> Rated")
+            add_if(rated, f"<emoji document_id=\"5274046919809704653\"> Rated")
             add_if(production, "Production")
             add_if(boxoffice, "BoxOffice")
             add_if(website, "Сайт")
             if imdb_id:
-                parts.append(f"<emoji document_id=5271604874419647061> <b>Ссылка:</b> <a href='{imdb_link}'>IMDb</a>")
-            parts.append(f"<emoji document_id=5271604874419647061> <b>Трейлер:</b> <a href='{trailer_search}'>Поиск на YouTube</a>")
+                parts.append(f"<emoji document_id=\"5271604874419647061\"> <b>Ссылка:</b> <a href='{imdb_link}'>IMDb</a>")
+            parts.append(f"<emoji document_id=\"5271604874419647061\"> <b>Трейлер:</b> <a href='{trailer_search}'>Поиск на YouTube</a>")
             details = "\n".join(parts)
             if poster and poster != "N/A":
                 try:
