@@ -14,7 +14,7 @@ class Download(loader.Module):
         "no_target": "❌ Ответь на сообщение или укажи id/@user.",
         "user_not_found": "❌ Пользователь не найден.",
         "collecting_user": "⏳ Сбор сообщений {name}{filter}...",
-        "collecting_chat": "⏳ Выгрузка истории чата{filter}: {title}...",
+        "collecting_chat": "⏳ Выгрузка истории{filter}: {title}...",
         "none_found": "❌ Сообщений не найдено.",
         "error": "❌ Ошибка: {e}",
     }
@@ -25,7 +25,7 @@ class Download(loader.Module):
         "no_target": "❌ Reply to a message or specify id/@user.",
         "user_not_found": "❌ User not found.",
         "collecting_user": "⏳ Collecting messages from {name}{filter}...",
-        "collecting_chat": "⏳ Exporting chat history{filter}: {title}...",
+        "collecting_chat": "⏳ Exporting history{filter}: {title}...",
         "none_found": "❌ No messages found.",
         "error": "❌ Error: {e}",
     }
@@ -46,9 +46,10 @@ class Download(loader.Module):
 
         client = message.client
         chat = await message.get_chat()
+        is_private = isinstance(chat, User)
 
         if args[:2] == ["chat", "history"]:
-            title = getattr(chat, "title", None) or "Chat"
+            title = getattr(chat, "title", None) or getattr(chat, "first_name", "Private Chat")
             ftext = f" '{query}'" if query else ""
             status = await utils.answer(
                 message,
@@ -57,7 +58,6 @@ class Download(loader.Module):
 
             filename = f"chat_{chat.id}.txt"
             count = 0
-            is_private = not str(chat.id).startswith("-100")
 
             try:
                 with open(filename, "w", encoding="utf-8") as f:
@@ -65,31 +65,44 @@ class Download(loader.Module):
                         sender = await msg.get_sender()
                         date = msg.date.strftime("%d/%m/%Y %H:%M:%S")
 
-                        if isinstance(sender, User):
-                            uid = sender.id
-                            uname = sender.first_name or "NoName"
-                        elif isinstance(sender, Channel):
-                            uid = sender.id
-                            uname = sender.title
+                        if not sender:
+                            uid, uname = 0, "Unknown"
+                        elif isinstance(sender, User):
+                            uid, uname = sender.id, sender.first_name or "NoName"
                         else:
-                            uid = 0
-                            uname = "Service"
+                            uid, uname = sender.id, getattr(sender, 'title', 'Channel/Chat')
 
+                        content = "Service/Empty"
                         if msg.text:
                             content = msg.text.replace("\n", " ")
-                        elif msg.media:
-                            content = "media"
-                        else:
-                            content = "other"
+                        elif msg.photo:
+                            content = "Photo"
+                        elif msg.voice:
+                            content = "Voice Message"
+                        elif msg.video_note:
+                            content = "Video Note (Round)"
+                        elif msg.video:
+                            content = "Video"
+                        elif msg.sticker:
+                            content = f"Sticker ({getattr(msg.file, 'emoji', 'NoEmoji')})"
+                        elif msg.gif:
+                            content = "GIF"
+                        elif msg.audio:
+                            content = f"Audio ({getattr(msg.file, 'title', 'Track')})"
+                        elif msg.document:
+                            content = f"File ({getattr(msg.file, 'name', 'Unnamed')})"
+                        elif msg.contact:
+                            content = "Contact"
+                        elif msg.geo:
+                            content = "Location"
 
-                        if is_private:
+                        if is_private or not str(chat.id).startswith("-100"):
                             link = f"tg://openmessage?user_id={chat.id}&message_id={msg.id}"
                         else:
                             link = f"https://t.me/c/{str(chat.id)[4:]}/{msg.id}"
 
                         f.write(f"{uid} | {uname} | {date} | {content} | {link}\n")
                         count += 1
-
                         if count % 100 == 0:
                             await status.edit(f"⏳ {count}...")
 
@@ -97,9 +110,9 @@ class Download(loader.Module):
                     await status.edit(self.strings["none_found"])
                 else:
                     await client.send_file(
-                        chat.id,
+                        message.peer_id,
                         filename,
-                        caption=f"📂 Chat history\n🔍 Filter: {query or 'NONE'}\n📊 Total: {count}",
+                        caption=f"📂 History Export\n🔍 Filter: {query or 'NONE'}\n📊 Total: {count}",
                     )
                     await status.delete()
 
@@ -112,7 +125,6 @@ class Download(loader.Module):
 
         if args[:1] == ["history"]:
             target = None
-
             if message.is_reply:
                 reply = await message.get_reply_message()
                 target = await reply.get_sender()
@@ -128,12 +140,10 @@ class Download(loader.Module):
                 return
 
             ftext = f" '{query}'" if query else ""
+            t_name = getattr(target, 'first_name', 'User') or "User"
             status = await utils.answer(
                 message,
-                self.strings["collecting_user"].format(
-                    name=target.first_name or "User",
-                    filter=ftext
-                )
+                self.strings["collecting_user"].format(name=t_name, filter=ftext)
             )
 
             filename = f"user_{target.id}.txt"
@@ -141,24 +151,34 @@ class Download(loader.Module):
 
             try:
                 with open(filename, "w", encoding="utf-8") as f:
-                    async for msg in client.iter_messages(
-                        chat.id,
-                        from_user=target.id,
-                        search=query
-                    ):
+                    async for msg in client.iter_messages(chat.id, from_user=target.id, search=query):
                         date = msg.date.strftime("%d/%m/%Y %H:%M:%S")
-                        content = msg.text.replace("\n", " ") if msg.text else "media"
+                        
+                        content = "Service/Empty"
+                        if msg.text:
+                            content = msg.text.replace("\n", " ")
+                        elif msg.photo:
+                            content = "Photo"
+                        elif msg.voice:
+                            content = "Voice Message"
+                        elif msg.video_note:
+                            content = "Video Note (Round)"
+                        elif msg.video:
+                            content = "Video"
+                        elif msg.sticker:
+                            content = "Sticker"
+                        elif msg.gif:
+                            content = "GIF"
+                        elif msg.document:
+                            content = f"File ({getattr(msg.file, 'name', 'Unnamed')})"
 
-                        if str(chat.id).startswith("-100"):
-                            link = f"https://t.me/c/{str(chat.id)[4:]}/{msg.id}"
-                        else:
+                        if is_private or not str(chat.id).startswith("-100"):
                             link = f"tg://openmessage?user_id={target.id}&message_id={msg.id}"
+                        else:
+                            link = f"https://t.me/c/{str(chat.id)[4:]}/{msg.id}"
 
-                        f.write(
-                            f"{target.id} | {target.first_name} | {date} | {content} | {link}\n"
-                        )
+                        f.write(f"{target.id} | {t_name} | {date} | {content} | {link}\n")
                         total += 1
-
                         if total % 100 == 0:
                             await status.edit(f"⏳ {total}...")
 
@@ -166,9 +186,9 @@ class Download(loader.Module):
                     await status.edit(self.strings["none_found"])
                 else:
                     await client.send_file(
-                        chat.id,
+                        message.peer_id,
                         filename,
-                        caption=f"👤 User history\n🔍 Filter: {query or 'NONE'}\n📊 Total: {total}",
+                        caption=f"👤 User History\n🔍 Filter: {query or 'NONE'}\n📊 Total: {total}",
                     )
                     await status.delete()
 
