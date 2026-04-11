@@ -221,17 +221,17 @@ class FunstatWhois(loader.Module):
             f"<b>Профиль</b>\n"
             + "\n".join(profile_lines) +
             f"\n</blockquote>\n\n"
-            f"<blockquote expandable>\n"
+            f"<blockquote expandable>"
             f"<b>Статистика</b>\n"
             + "\n".join(min_lines) +
             "\n"
             + "\n".join(full_lines) +
             f"\n</blockquote>\n\n"
-            f"<blockquote expandable>\n"
+            f"<blockquote expandable>"
             f"<b>Использование ника</b>\n"
             + "\n".join(usage_lines) +
             f"\n</blockquote>\n\n"
-            f"<blockquote expandable>\n"
+            f"<blockquote expandable>"
             f"<b>История</b>\n"
             + "\n".join(history_lines) +
             f"\n</blockquote>"
