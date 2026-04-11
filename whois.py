@@ -18,21 +18,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class FunstatWhois(loader.Module):
     strings = {
         "name": "FunstatWhois",
-        "no_token": "<b>❌ Токен не задан.</b>\n\n<b>Используй:</b> <code>?settoken токен</code>",
+        "no_token": "<b>❌ Токен не задан.</b>\n<b>Используй:</b> <code>?settoken токен</code>",
         "saved": "<b>✅ Токен сохранён.</b>",
         "invalid": "<b>❌ Укажи ответ на сообщение или юзернейм / ID / ссылку.</b>",
         "not_found": "<b>❌ Пользователь не найден.</b>",
         "error": "<b>Ошибка:</b> <code>{}</code>",
-        "need_arg": "<b>❌ Укажи токен.</b>\n\n<b>Пример:</b> <code>?settoken abc123</code>",
+        "need_arg": "<b>❌ Укажи токен.</b>\n<b>Пример:</b> <code>?settoken abc123</code>",
         "loading": "<b>⏳ Получаю данные...</b>",
     }
 
     strings_ru = {
-        "whois_title": "<b>👤 WHOIS • {target}</b>",
-        "profile": "<b>Профиль</b>",
-        "stats": "<b>Статистика</b>",
-        "history": "<b>История</b>",
-        "usage": "<b>Использование ника</b>",
         "yes": "Да",
         "no": "Нет",
         "none": "нет",
@@ -90,7 +85,14 @@ class FunstatWhois(loader.Module):
         q = (raw or "").strip()
         q = q.split("?")[0].strip()
 
-        for prefix in ("https://t.me/", "http://t.me/", "t.me/", "https://telegram.me/", "http://telegram.me/", "telegram.me/"):
+        for prefix in (
+            "https://t.me/",
+            "http://t.me/",
+            "t.me/",
+            "https://telegram.me/",
+            "http://telegram.me/",
+            "telegram.me/",
+        ):
             if q.startswith(prefix):
                 q = q[len(prefix):].strip("/")
 
@@ -112,7 +114,7 @@ class FunstatWhois(loader.Module):
             return raw
         return f"@{raw}" if raw else "unknown"
 
-    def _format_history_items(self, items, kind="user"):
+    def _history_block(self, items, kind="user"):
         if not items:
             return f"• {self.strings_ru['none']}"
         lines = []
@@ -126,78 +128,75 @@ class FunstatWhois(loader.Module):
             lines.append(f"• <code>{self._esc(dt)}</code> → <code>{self._esc(name)}</code>")
         return "\n".join(lines)
 
+    def _kv(self, key, value):
+        return f"• <b>{key}:</b> <code>{value}</code>"
+
     def _build_report(self, query, resolved, min_stats, full_stats, names, usernames, usage):
         target = self._display_target(query, resolved)
 
         profile_lines = []
         if resolved is not None:
-            profile_lines.append(f"• <b>ID:</b> <code>{self._esc(self._g(resolved, 'id'))}</code>")
-            profile_lines.append(f"• <b>Юзернейм:</b> <code>{self._esc('@' + self._g(resolved, 'username')) if self._g(resolved, 'username') else '-'}</code>")
+            profile_lines.append(self._kv("ID", self._esc(self._g(resolved, "id"))))
+            username = self._g(resolved, "username")
+            profile_lines.append(self._kv("Юзернейм", f"@{self._esc(username)}" if username else "-"))
             name = f"{self._g(resolved, 'first_name', '')} {self._g(resolved, 'last_name', '')}".strip()
-            profile_lines.append(f"• <b>Имя:</b> <code>{self._esc(name if name else '-')}</code>")
-            profile_lines.append(f"• <b>Активен:</b> <code>{self._fmt_bool(self._g(resolved, 'is_active'))}</code>")
-            profile_lines.append(f"• <b>Бот:</b> <code>{self._fmt_bool(self._g(resolved, 'is_bot'))}</code>")
-            profile_lines.append(f"• <b>Premium:</b> <code>{self._fmt_bool(self._g(resolved, 'has_premium'))}</code>")
+            profile_lines.append(self._kv("Имя", self._esc(name if name else "-")))
+            profile_lines.append(self._kv("Активен", self._fmt_bool(self._g(resolved, "is_active"))))
+            profile_lines.append(self._kv("Бот", self._fmt_bool(self._g(resolved, "is_bot"))))
+            profile_lines.append(self._kv("Premium", self._fmt_bool(self._g(resolved, "has_premium"))))
             about = self._g(resolved, "about")
             if about is not None:
-                profile_lines.append(f"• <b>О себе:</b> <code>{self._short(about, 90)}</code>")
+                profile_lines.append(self._kv("О себе", self._short(about, 80)))
         else:
-            profile_lines.append(f"• <b>Запрос:</b> <code>{self._esc(query)}</code>")
+            profile_lines.append(self._kv("Запрос", self._esc(query)))
 
-        min_lines = []
+        stats_lines = []
         if min_stats is not None:
-            min_lines.extend([
-                f"• <b>Первое сообщение:</b> <code>{self._fmt_dt(self._g(min_stats, 'first_msg_date'))}</code>",
-                f"• <b>Последнее сообщение:</b> <code>{self._fmt_dt(self._g(min_stats, 'last_msg_date'))}</code>",
-                f"• <b>Всего сообщений:</b> <code>{self._esc(self._g(min_stats, 'total_msg_count'))}</code>",
-                f"• <b>Сообщений в группах:</b> <code>{self._esc(self._g(min_stats, 'msg_in_groups_count'))}</code>",
-                f"• <b>Админ в группах:</b> <code>{self._esc(self._g(min_stats, 'adm_in_groups'))}</code>",
-                f"• <b>Групп найдено:</b> <code>{self._esc(self._g(min_stats, 'total_groups'))}</code>",
-                f"• <b>Юзернеймов:</b> <code>{self._esc(self._g(min_stats, 'usernames_count'))}</code>",
-                f"• <b>Имен:</b> <code>{self._esc(self._g(min_stats, 'names_count'))}</code>",
+            stats_lines.extend([
+                self._kv("Первое сообщение", self._fmt_dt(self._g(min_stats, "first_msg_date"))),
+                self._kv("Последнее сообщение", self._fmt_dt(self._g(min_stats, "last_msg_date"))),
+                self._kv("Всего сообщений", self._esc(self._g(min_stats, "total_msg_count"))),
+                self._kv("Сообщений в группах", self._esc(self._g(min_stats, "msg_in_groups_count"))),
+                self._kv("Админ в группах", self._esc(self._g(min_stats, "adm_in_groups"))),
+                self._kv("Групп найдено", self._esc(self._g(min_stats, "total_groups"))),
+                self._kv("Юзернеймов", self._esc(self._g(min_stats, "usernames_count"))),
+                self._kv("Имен", self._esc(self._g(min_stats, "names_count"))),
             ])
         else:
-            min_lines.append("• <b>Нет данных</b>")
+            stats_lines.append(f"• {self.strings_ru['none']}")
 
         full_lines = []
         if full_stats is not None:
             full_lines.extend([
-                f"• <b>Язык:</b> <code>{self._esc(self._g(full_stats, 'lang_code'))}</code>",
-                f"• <b>Кириллица основная:</b> <code>{self._fmt_bool(self._g(full_stats, 'is_cyrillic_primary'))}</code>",
-                f"• <b>Уникальность:</b> <code>{self._fmt_pct(self._g(full_stats, 'unique_percent'))}</code>",
-                f"• <b>Reply:</b> <code>{self._fmt_pct(self._g(full_stats, 'reply_percent'))}</code>",
-                f"• <b>Медиа:</b> <code>{self._fmt_pct(self._g(full_stats, 'media_percent'))}</code>",
-                f"• <b>Ссылки:</b> <code>{self._fmt_pct(self._g(full_stats, 'link_percent'))}</code>",
-                f"• <b>Голосовые:</b> <code>{self._esc(self._g(full_stats, 'voice_count'))}</code>",
-                f"• <b>Кружки:</b> <code>{self._esc(self._g(full_stats, 'circle_count'))}</code>",
-                f"• <b>Подарки:</b> <code>{self._esc(self._g(full_stats, 'gift_count'))}</code>",
-                f"• <b>Stars value:</b> <code>{self._esc(self._g(full_stats, 'stars_val'))}</code>",
+                self._kv("Язык", self._esc(self._g(full_stats, "lang_code"))),
+                self._kv("Кириллица основная", self._fmt_bool(self._g(full_stats, "is_cyrillic_primary"))),
+                self._kv("Уникальность", self._fmt_pct(self._g(full_stats, "unique_percent"))),
+                self._kv("Reply", self._fmt_pct(self._g(full_stats, "reply_percent"))),
+                self._kv("Медиа", self._fmt_pct(self._g(full_stats, "media_percent"))),
+                self._kv("Ссылки", self._fmt_pct(self._g(full_stats, "link_percent"))),
+                self._kv("Голосовые", self._esc(self._g(full_stats, "voice_count"))),
+                self._kv("Кружки", self._esc(self._g(full_stats, "circle_count"))),
+                self._kv("Подарки", self._esc(self._g(full_stats, "gift_count"))),
+                self._kv("Stars value", self._esc(self._g(full_stats, "stars_val"))),
             ])
 
             fav = self._g(full_stats, "favorite_chat")
             if fav is not None:
-                full_lines.append(f"• <b>Любимый чат:</b> <code>{self._esc(self._g(fav, 'title'))}</code>")
+                full_lines.append(self._kv("Любимый чат", self._esc(self._g(fav, "title"))))
                 if self._g(fav, "username"):
-                    full_lines.append(f"• <b>Юзернейм чата:</b> <code>@{self._esc(self._g(fav, 'username'))}</code>")
+                    full_lines.append(self._kv("Юзернейм чата", f"@{self._esc(self._g(fav, 'username'))}"))
 
             media_usage = self._g(full_stats, "media_usage")
             if media_usage is not None:
                 if isinstance(media_usage, list):
                     media_usage = ", ".join(map(str, media_usage))
-                full_lines.append(f"• <b>Media usage:</b> <code>{self._esc(media_usage)}</code>")
+                full_lines.append(self._kv("Media usage", self._esc(media_usage)))
 
             about = self._g(full_stats, "about")
             if about is not None:
-                full_lines.append(f"• <b>Bio:</b> <code>{self._short(about, 90)}</code>")
+                full_lines.append(self._kv("Bio", self._short(about, 80)))
         else:
-            full_lines.append("• <b>Нет данных</b>")
-
-        history_lines = []
-        history_lines.append("• <b>Юзернеймы:</b>")
-        history_lines.append(self._format_history_items(usernames, kind="user"))
-        history_lines.append("")
-        history_lines.append("• <b>Имена:</b>")
-        history_lines.append(self._format_history_items(names, kind="name"))
+            full_lines.append(f"• {self.strings_ru['none']}")
 
         usage_lines = []
         if usage is not None:
@@ -207,32 +206,31 @@ class FunstatWhois(loader.Module):
             mentions = self._g(usage, "mention_by_channel_or_group_desc", []) or []
 
             usage_lines.extend([
-                f"• <b>Актуальные пользователи:</b> <code>{len(actual_users)}</code>",
-                f"• <b>Прошлые пользователи:</b> <code>{len(past_users)}</code>",
-                f"• <b>Группы/каналы:</b> <code>{len(actual_groups)}</code>",
-                f"• <b>Упоминания в описаниях:</b> <code>{len(mentions)}</code>",
+                self._kv("Актуальные пользователи", len(actual_users)),
+                self._kv("Прошлые пользователи", len(past_users)),
+                self._kv("Группы/каналы", len(actual_groups)),
+                self._kv("Упоминания в описаниях", len(mentions)),
             ])
         else:
-            usage_lines.append("• <b>Нет данных</b>")
+            usage_lines.append(f"• {self.strings_ru['none']}")
+
+        history_lines = [
+            f"• <b>Юзернеймы:</b>\n{self._history_block(usernames, kind='user')}",
+            f"• <b>Имена:</b>\n{self._history_block(names, kind='name')}",
+        ]
 
         text = (
-            f"<b>👤 WHOIS • {self._esc(target)}</b>\n\n"
+            f"<b>👤 WHOIS • {self._esc(target)}</b>\n"
             f"<blockquote expandable>\n"
             f"<b>Профиль</b>\n"
-            + "\n".join(profile_lines) +
-            f"\n</blockquote>\n\n"
-            f"<blockquote expandable>"
-            f"<b>Статистика</b>\n"
-            + "\n".join(min_lines) +
+            + "\n".join(profile_lines) + "\n"
+            f"\n<b>Статистика</b>\n"
+            + "\n".join(stats_lines) +
             "\n"
             + "\n".join(full_lines) +
-            f"\n</blockquote>\n\n"
-            f"<blockquote expandable>"
-            f"<b>Использование ника</b>\n"
+            f"\n\n<b>Использование ника</b>\n"
             + "\n".join(usage_lines) +
-            f"\n</blockquote>\n\n"
-            f"<blockquote expandable>"
-            f"<b>История</b>\n"
+            f"\n\n<b>История</b>\n"
             + "\n".join(history_lines) +
             f"\n</blockquote>"
         )
@@ -348,6 +346,7 @@ class FunstatWhois(loader.Module):
                         sid = getattr(sender, "id", None)
                         if sid is not None:
                             query = str(sid)
+
                 if not query:
                     sid = getattr(reply, "sender_id", None)
                     if sid is not None:
