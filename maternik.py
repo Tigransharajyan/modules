@@ -1,4 +1,4 @@
-# meta developer: @DDS_MrL
+# meta developer: @shaatimi
 
 from .. import loader, utils
 import asyncio
@@ -8,8 +8,8 @@ import random
 class HardMatSpamMod(loader.Module):
     strings = {
         "name": "HardMatSpam",
-        "started": "<b>🔥 МАТ-СПАМ ЗАПУЩЕН 🔥</b>",
-        "stopped": "<b>🛑 МАТ-СПАМ ОСТАНОВЛЕН 🛑</b>",
+        "started": "<b>Я те мать ебу</b>",
+        "stopped": "<b>Сынище дохляка</b>",
         "already": "<b>⚠️ УЖЕ СПАМИМ В ЭТОМ ЧАТЕ</b>",
         "not_running": "<b>⚠️ СПАМ НЕ БЫЛ ЗАПУЩЕН</b>",
         "error": "<b>❌ ОШИБКА: {}</b>"
