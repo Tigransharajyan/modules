@@ -6,6 +6,7 @@ import asyncio
 import html
 import requests
 import time
+from datetime import datetime
 from urllib.parse import quote
 
 
@@ -45,6 +46,45 @@ class Weather(loader.Module):
     }
 
     strings_ru = strings
+
+    _desc_map = {
+        "Light drizzle": "Лёгкая морось",
+        "Patchy light drizzle": "Местами лёгкая морось",
+        "Patchy rain possible": "Возможен местами дождь",
+        "Light rain": "Слабый дождь",
+        "Moderate rain": "Умеренный дождь",
+        "Heavy rain": "Сильный дождь",
+        "Patchy light rain": "Местами слабый дождь",
+        "Light rain shower": "Кратковременный слабый дождь",
+        "Moderate rain at times": "Местами умеренный дождь",
+        "Heavy rain at times": "Местами сильный дождь",
+        "Thundery outbreaks possible": "Возможны грозовые разряды",
+        "Thunderstorm": "Гроза",
+        "Light snow": "Лёгкий снег",
+        "Moderate snow": "Умеренный снег",
+        "Heavy snow": "Сильный снег",
+        "Patchy snow possible": "Возможен местами снег",
+        "Blizzard": "Метель",
+        "Sleet": "Мокрый снег",
+        "Ice pellets": "Ледяная крупа",
+        "Fog": "Туман",
+        "Mist": "Дымка",
+        "Freezing fog": "Гололёдный туман",
+        "Cloudy": "Облачно",
+        "Overcast": "Пасмурно",
+        "Partly cloudy": "Переменная облачность",
+        "Clear": "Ясно",
+        "Sunny": "Солнечно",
+        "Patchy light snow": "Местами лёгкий снег",
+        "Patchy moderate snow": "Местами умеренный снег",
+        "Patchy heavy snow": "Местами сильный снег",
+        "Light sleet": "Лёгкий мокрый снег",
+        "Moderate or heavy sleet": "Умеренный или сильный мокрый снег",
+        "Light sleet showers": "Кратковременный лёгкий мокрый снег",
+        "Moderate or heavy sleet showers": "Кратковременный умеренный или сильный мокрый снег",
+        "Light showers of ice pellets": "Кратковременные слабые осадки ледяной крупы",
+        "Moderate or heavy showers of ice pellets": "Кратковременные умеренные или сильные осадки ледяной крупы",
+    }
 
     def _get_session(self):
         session = getattr(self, "_weather_session", None)
@@ -148,10 +188,45 @@ class Weather(loader.Module):
             self._first_value(nearest.get("region")),
             self._first_value(nearest.get("country")),
         ]
-        parts = [p for p in parts if p]
-        if parts:
-            return ", ".join(html.escape(str(p)) for p in parts[:3])
+        cleaned = []
+        seen = set()
+        for part in parts:
+            if not part:
+                continue
+            key = str(part).strip().casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(str(part).strip())
+        if cleaned:
+            return ", ".join(html.escape(x) for x in cleaned[:3])
         return html.escape(fallback)
+
+    def _translate_desc(self, desc):
+        text = (desc or "").strip()
+        if not text:
+            return "—"
+        return self._desc_map.get(text, text).capitalize()
+
+    def _parse_time(self, value):
+        if not value:
+            return "—"
+        value = str(value).strip()
+        formats = (
+            "%Y-%m-%d %I:%M %p",
+            "%Y-%m-%d %H:%M",
+            "%I:%M %p",
+            "%H:%M",
+        )
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(value, fmt)
+                if "%Y" in fmt:
+                    return dt.strftime("%d.%m.%Y %H:%M")
+                return dt.strftime("%H:%M")
+            except ValueError:
+                pass
+        return value
 
     def _fetch_weather(self, city):
         key = city.casefold()
@@ -219,7 +294,7 @@ class Weather(loader.Module):
             precip = float(current.get("precipMM", 0))
             uv = current.get("uvIndex", "—")
             winddir = current.get("winddir16Point") or current.get("winddirDegree") or "—"
-            desc = ((current.get("weatherDesc") or [{}])[0]).get("value", "—")
+            desc = self._translate_desc((current.get("weatherDesc") or [{}])[0].get("value", "—"))
             obstime = current.get("localObsDateTime") or current.get("observation_time") or "—"
             sunrise = astronomy.get("sunrise") or "—"
             sunset = astronomy.get("sunset") or "—"
@@ -236,7 +311,7 @@ class Weather(loader.Module):
         text = self.strings["weather_info"].format(
             icon=icon,
             location=location,
-            desc=self._text(desc.capitalize()),
+            desc=self._text(desc),
             temp=temp,
             feels=feels,
             avg=avg,
@@ -251,9 +326,9 @@ class Weather(loader.Module):
             visibility=self._num(visibility, 0),
             precip=self._num(precip, 1),
             uv=self._text(uv),
-            sunrise=self._text(sunrise),
-            sunset=self._text(sunset),
-            obstime=self._text(obstime),
+            sunrise=self._parse_time(sunrise),
+            sunset=self._parse_time(sunset),
+            obstime=self._parse_time(obstime),
             temp_emoji=temp_emoji,
             feels_emoji=feels_emoji,
             wind_emoji=wind_emoji,
