@@ -16,24 +16,24 @@ class MText(loader.Module):
         "usage": "<b>❌ Использование:</b> <code>?mtext &lt;кол-во строк&gt; &lt;artist - title | title&gt;</code>",
         "empty": "<b>❌ Нет текста.</b>",
         "notfound": "<b>❌ Текст не найден.</b>",
-        "badjson": "<b>❌ Некорректный ответ API.</b>",
         "error": "<b>Ошибка:</b> <code>{}</code>",
     }
 
     strings_ru = strings
 
     def _session(self):
-        s = getattr(self, "_mtext_session", None)
-        if s is None:
-            s = requests.Session()
-            s.headers.update(
+        session = getattr(self, "_mtext_session", None)
+        if session is None:
+            session = requests.Session()
+            session.headers.update(
                 {
                     "User-Agent": "Mozilla/5.0",
                     "Accept": "application/json,text/plain,*/*",
+                    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
                 }
             )
-            self._mtext_session = s
-        return s
+            self._mtext_session = session
+        return session
 
     def _cache_get(self, key):
         cache = getattr(self, "_mtext_cache", None)
@@ -56,85 +56,120 @@ class MText(loader.Module):
         cache[key] = (time.monotonic(), value)
 
     def _get_json(self, url, params=None):
-        session = self._session()
-        r = session.get(url, params=params, timeout=(4, 12))
+        r = self._session().get(url, params=params, timeout=(4, 12))
         r.raise_for_status()
         return r.json()
 
-    def _normalize_lines(self, lyrics, limit):
-        lines = []
-        for line in str(lyrics).splitlines():
-            line = line.strip()
-            if line:
-                lines.append(line)
-            if len(lines) >= limit:
-                break
-        return lines
-
     def _split_query(self, query):
+        query = query.strip()
         if " - " in query:
             artist, title = query.split(" - ", 1)
             artist = artist.strip()
             title = title.strip()
             if artist and title:
                 return artist, title
-        return "", query.strip()
+        return "", query
 
-    def _suggest_track(self, term):
-        cache_key = f"suggest:{term.casefold()}"
-        cached = self._cache_get(cache_key)
-        if cached is not None:
-            return cached
+    def _clean_lines(self, text, limit):
+        lines = []
+        for raw in str(text).splitlines():
+            line = raw.strip()
+            if line:
+                lines.append(line)
+            if len(lines) >= limit:
+                break
+        return lines
 
-        data = self._get_json(f"https://api.lyrics.ovh/suggest/{quote(term, safe='')}")
-        items = []
+    def _normalize_text(self, text):
+        text = str(text or "").strip()
+        return text.replace("\r\n", "\n").replace("\r", "\n")
 
-        if isinstance(data, dict):
-            items = data.get("data") or data.get("items") or data.get("results") or []
-        elif isinstance(data, list):
-            items = data
-
-        if not items:
-            self._cache_set(cache_key, None)
+    def _extract_lyrics_from_lrclib(self, payload):
+        if not payload:
             return None
 
-        first = items[0] or {}
-        artist = ""
-        title = ""
+        if isinstance(payload, dict):
+            for key in ("plainLyrics", "syncedLyrics", "lyrics", "text"):
+                value = payload.get(key)
+                if value:
+                    return value
 
-        if isinstance(first, dict):
-            artist_val = first.get("artist")
-            if isinstance(artist_val, dict):
-                artist = artist_val.get("name") or ""
-            elif isinstance(artist_val, str):
-                artist = artist_val
+            if isinstance(payload.get("data"), dict):
+                return self._extract_lyrics_from_lrclib(payload["data"])
 
-            title = first.get("title") or first.get("name") or ""
-        elif isinstance(first, str):
-            title = first
+            if isinstance(payload.get("results"), list) and payload["results"]:
+                return self._extract_lyrics_from_lrclib(payload["results"][0])
 
-        if not title:
-            title = term
+        if isinstance(payload, list) and payload:
+            for item in payload:
+                found = self._extract_lyrics_from_lrclib(item)
+                if found:
+                    return found
 
-        result = (artist.strip(), title.strip())
-        self._cache_set(cache_key, result)
-        return result
+        return None
 
-    def _get_lyrics(self, artist, title):
-        key = f"lyrics:{artist.casefold()}:{title.casefold()}"
+    def _lyrics_ovh(self, artist, title):
+        key = f"ovh:{artist.casefold()}:{title.casefold()}"
         cached = self._cache_get(key)
         if cached is not None:
             return cached
 
-        data = self._get_json(
-            f"https://api.lyrics.ovh/v1/{quote(artist, safe='')}/{quote(title, safe='')}"
-        )
+        url = f"https://api.lyrics.ovh/v1/{quote(artist, safe='')}/{quote(title, safe='')}"
+        try:
+            data = self._get_json(url)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                self._cache_set(key, None)
+                return None
+            raise
 
         lyrics = None
         if isinstance(data, dict):
             lyrics = data.get("lyrics")
-            if not lyrics and data.get("error"):
-                lyrics = None
+
+        self._cache_set(key, lyrics)
+        return lyrics
+
+    def _lrclib_get(self, artist, title):
+        key = f"lrclib_get:{artist.casefold()}:{title.casefold()}"
+        cached = self._cache_get(key)
+        if cached is not None:
+            return cached
+
+        url = "https://lrclib.net/api/get"
+        params = {
+            "artist_name": artist,
+            "track_name": title,
+        }
+        try:
+            data = self._get_json(url, params=params)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                self._cache_set(key, None)
+                return None
+            raise
+
+        lyrics = self._extract_lyrics_from_lrclib(data)
+        self._cache_set(key, lyrics)
+        return lyrics
+
+    def _lrclib_search(self, query):
+        key = f"lrclib_search:{query.casefold()}"
+        cached = self._cache_get(key)
+        if cached is not None:
+            return cached
+
+        url = "https://lrclib.net/api/search"
+        data = self._get_json(url, params={"query": query})
+
+        lyrics = None
+        if isinstance(data, list):
+            for item in data:
+                lyrics = self._extract_lyrics_from_lrclib(item)
+                if lyrics:
+                    break
+        else:
+            lyrics = self._extract_lyrics_from_lrclib(data)
 
         self._cache_set(key, lyrics)
         return lyrics
@@ -169,19 +204,20 @@ class MText(loader.Module):
         try:
             artist, title = self._split_query(query)
 
-            if not artist:
-                suggested = await asyncio.to_thread(self._suggest_track, query)
-                if not suggested:
-                    await utils.answer(message, self.strings["notfound"])
-                    return
-                artist, title = suggested
+            lyrics = None
+            if artist and title:
+                lyrics = await asyncio.to_thread(self._lyrics_ovh, artist, title)
+                if not lyrics:
+                    lyrics = await asyncio.to_thread(self._lrclib_get, artist, title)
 
-            lyrics = await asyncio.to_thread(self._get_lyrics, artist, title)
+            if not lyrics:
+                lyrics = await asyncio.to_thread(self._lrclib_search, query)
+
             if not lyrics:
                 await utils.answer(message, self.strings["notfound"])
                 return
 
-            lines = self._normalize_lines(lyrics, count)
+            lines = self._clean_lines(self._normalize_text(lyrics), count)
             if not lines:
                 await utils.answer(message, self.strings["notfound"])
                 return
@@ -193,7 +229,5 @@ class MText(loader.Module):
             await utils.answer(message, self.strings["error"].format("Timeout"))
         except requests.RequestException as e:
             await utils.answer(message, self.strings["error"].format(html.escape(str(e))))
-        except ValueError:
-            await utils.answer(message, self.strings["badjson"])
         except Exception as e:
             await utils.answer(message, self.strings["error"].format(html.escape(str(e))))
